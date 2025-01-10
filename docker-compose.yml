@@ -1,0 +1,20 @@
+# Use to test langchain-mariadb
+version: "3"
+
+services:
+  postgres:
+    image: mariadb:11.7-rc
+    environment:
+      MARIADB_USER: langchain
+      MARIADB_PASSWORD: langchain
+      MARIADB_ROOT_PASSWORD: langchain
+      MARIADB_DATABASE: langchain
+    ports:
+      - "3306:3306"
+    healthcheck:
+      test: [ "CMD", "healthcheck.sh", "--connect", "--innodb_initialized" ]
+      start_period: 10s
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
