@@ -45,7 +45,7 @@ jobs:
         shell: bash
         env:
           MARIADB_HOST: mariadb.example.com
-          MARIADB_USER: langchain
+          MARIADB_USER: root
           MARIADB_PASSWORD: langchain
           MARIADB_ROOT_PASSWORD: langchain
           MARIADB_DATABASE: langchain
