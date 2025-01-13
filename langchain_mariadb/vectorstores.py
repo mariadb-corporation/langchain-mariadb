@@ -1229,8 +1229,14 @@ class MariaDBStore(VectorStore):
                         raise NotImplementedError(
                             f"Unsupported type: {type(val)} for value: {val}"
                         )
-
-            return SPECIAL_CASED_OPERATORS[operator](field, filter_value)
+            if val == "$in":
+                return f.includes(field, filter_value)
+            elif val == "$nin":
+                return f.excludes(field, filter_value)
+            elif val == "$like":
+                return f.like(field, filter_value)
+            else:
+                return f.nlike(field, filter_value)
         else:
             raise NotImplementedError(f"Operator {operator} not implemented")
 
