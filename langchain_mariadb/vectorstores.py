@@ -1090,7 +1090,7 @@ class MariaDBStore(VectorStore):
         need_embeddings: bool = False,
     ) -> Sequence[Any]:
         """Query the collection for similar documents."""
-        distance_expr = f"vec_distance_{self._distance_strategy}({self._embedding_emb_col_name}, ?) as distance"
+        distance_expr = f"vec_distance_{self._distance_strategy.value}({self._embedding_emb_col_name}, ?) as distance"
         base_query, filter_sql = self._build_base_select_query(
             distance_expr, need_embeddings, filter
         )
@@ -1229,11 +1229,11 @@ class MariaDBStore(VectorStore):
                         raise NotImplementedError(
                             f"Unsupported type: {type(val)} for value: {val}"
                         )
-            if val == "$in":
+            if operator == "$in":
                 return f.includes(field, filter_value)
-            elif val == "$nin":
+            elif operator == "$nin":
                 return f.excludes(field, filter_value)
-            elif val == "$like":
+            elif operator == "$like":
                 return f.like(field, filter_value)
             else:
                 return f.nlike(field, filter_value)
