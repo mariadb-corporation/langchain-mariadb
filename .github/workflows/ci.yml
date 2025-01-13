@@ -48,7 +48,7 @@ jobs:
           container port: 3307 # Optional, default value is 3306. The port of container
           character set server: 'utf8mb4'
           collation server: 'utf8mb4_general_ci'
-          mariadb version: '11.7-RC'
+          mariadb version: '11.7-rc'
           mysql database: 'langchain'
           mysql root password: 'langchain'
           mysql user: 'langchain'
