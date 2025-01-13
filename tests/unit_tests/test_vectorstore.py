@@ -69,6 +69,29 @@ def test_mariadbstore() -> None:
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
 
+        output = docsearch.search("foo", "similarity", k=1)
+        _compare_documents(output, [Document(page_content="foo")])
+
+
+@pytest.mark.asyncio
+async def test_amariadbstore() -> None:
+    """Test end to end construction and search."""
+    texts = ["foo", "bar", "baz"]
+    with pool() as tmppool:
+        docsearch = MariaDBStore.from_texts(
+            texts=texts,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            embedding_length=ADA_TOKEN_COUNT,
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        output = await docsearch.asimilarity_search("foo", k=1)
+        _compare_documents(output, [Document(page_content="foo")])
+
+        output = await docsearch.asearch("foo", "similarity", k=1)
+        _compare_documents(output, [Document(page_content="foo")])
+
 
 def test_mariadb_store_embeddings() -> None:
     """Test end to end construction with embeddings and search."""
@@ -84,6 +107,23 @@ def test_mariadb_store_embeddings() -> None:
             config=StoreConfig(pre_delete_collection=True),
         )
         output = docsearch.similarity_search("foo", k=1)
+        _compare_documents(output, [Document(page_content="foo")])
+
+@pytest.mark.asyncio
+async def test_amariadb_store_embeddings() -> None:
+    """Test end to end construction with embeddings and search."""
+    texts = ["foo", "bar", "baz"]
+    text_embeddings = FakeEmbeddingsWithAdaDimension().embed_documents(texts)
+    text_embedding_pairs = list(zip(texts, text_embeddings))
+    with pool() as tmppool:
+        docsearch = MariaDBStore.from_embeddings(
+            text_embeddings=text_embedding_pairs,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        output = await docsearch.asimilarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
 
 
@@ -108,6 +148,27 @@ def test_mariadb_store_embeddings_config() -> None:
         _compare_documents(output, [Document(page_content="foo")])
 
 
+@pytest.mark.asyncio
+async def test_amariadb_store_embeddings_config() -> None:
+    store_config = StoreConfig()
+    store_config.pre_delete_collection = True
+    store_config.tables.embedding_table = "emb_table"
+    store_config.tables.collection_table = "col_table"
+
+    texts = ["foo", "bar", "baz"]
+    text_embeddings = FakeEmbeddingsWithAdaDimension().embed_documents(texts)
+    text_embedding_pairs = list(zip(texts, text_embeddings))
+    with pool() as tmppool:
+        docsearch = MariaDBStore.from_embeddings(
+            text_embeddings=text_embedding_pairs,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        output = await docsearch.asimilarity_search("foo", k=1)
+        _compare_documents(output, [Document(page_content="foo")])
+
 def test_mariadb_store_with_metadatas() -> None:
     """Test end to end construction and search."""
     texts = ["foo", "bar", "baz"]
@@ -126,6 +187,25 @@ def test_mariadb_store_with_metadatas() -> None:
             output, [Document(page_content="foo", metadata={"page": "0"})]
         )
 
+
+@pytest.mark.asyncio
+async def test_amariadb_store_with_metadatas() -> None:
+    """Test end to end construction and search."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        docsearch = MariaDBStore.from_texts(
+            texts=texts,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        output = await docsearch.asimilarity_search("foo", k=1)
+        _compare_documents(
+            output, [Document(page_content="foo", metadata={"page": "0"})]
+        )
 
 def test_mariadb_store_with_metadatas_with_scores() -> None:
     """Test end to end construction and search."""
@@ -146,6 +226,26 @@ def test_mariadb_store_with_metadatas_with_scores() -> None:
         assert scores == (0.0,)
 
 
+@pytest.mark.asyncio
+async def test_amariadb_store_with_metadatas_with_scores() -> None:
+    """Test end to end construction and search."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        docsearch = MariaDBStore.from_texts(
+            texts=texts,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        output = await docsearch.asimilarity_search_with_score("foo", k=1)
+        docs, scores = zip(*output)
+        _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
+        assert scores == (0.0,)
+
+
 def test_mariadb_store_with_filter_match() -> None:
     """Test end to end construction and search."""
     texts = ["foo", "bar", "baz"]
@@ -160,6 +260,27 @@ def test_mariadb_store_with_filter_match() -> None:
             config=StoreConfig(pre_delete_collection=True),
         )
         output = docsearch.similarity_search_with_score(
+            "foo", k=1, filter={"page": "0"}
+        )
+        docs, scores = zip(*output)
+        _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
+        assert scores == (0.0,)
+
+@pytest.mark.asyncio
+async def test_amariadb_store_with_filter_match() -> None:
+    """Test end to end construction and search."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        docsearch = MariaDBStore.from_texts(
+            texts=texts,
+            collection_name="test_collection_filter",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        output = await docsearch.asimilarity_search_with_score(
             "foo", k=1, filter={"page": "0"}
         )
         docs, scores = zip(*output)
@@ -285,6 +406,53 @@ def test_mariadb_get_by_ids_format() -> None:
         retrieved_documents = vectorstore.get_by_ids(["blou"])
         assert retrieved_documents == []
 
+@pytest.mark.asyncio
+async def test_amariadb_get_by_ids_format() -> None:
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        documents = [
+            Document(page_content="foo", metadata={"id": 1}),
+            Document(page_content="bar", metadata={"id": 2}),
+        ]
+        vectorstore = await MariaDBStore.afrom_texts(
+            texts=texts,
+            collection_name="test_collection_filter",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            ids=[
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ],
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        ids = await vectorstore.aadd_documents(documents, ids=["1", "2"])
+
+        retrieved_documents = await vectorstore.aget_by_ids(ids)
+        assert retrieved_documents == [
+            Document(page_content="foo", metadata={"id": 1}, id=ids[0]),
+            Document(page_content="bar", metadata={"id": 2}, id=ids[1]),
+        ]
+
+        # Id format can only be UUID or numeric format
+        try:
+            await vectorstore.aadd_documents(documents, ids=["1/'1", "2"])
+            raise RuntimeError("must have thrown an error")
+        except ValueError:
+            pass
+        try:
+            await vectorstore.aget_by_ids(["1/'1", "2"])
+            raise RuntimeError("must have thrown an error")
+        except ValueError:
+            pass
+
+        retrieved_documents = await vectorstore.aget_by_ids([])
+        assert retrieved_documents == []
+
+        retrieved_documents = await vectorstore.aget_by_ids(["blou"])
+        assert retrieved_documents == []
 
 def test_mariadb_store_delete_docs() -> None:
     """Add and delete documents."""
@@ -329,6 +497,50 @@ def test_mariadb_store_delete_docs() -> None:
                 rows = cursor.fetchall()
                 assert len(rows) == 0
 
+
+@pytest.mark.asyncio
+async def test_amariadb_store_delete_docs() -> None:
+    """Add and delete documents."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        vectorstore = await MariaDBStore.afrom_texts(
+            texts=texts,
+            collection_name="test_collection_filter",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            ids=[
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ],
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        await vectorstore.adelete(
+            [
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+            ]
+        )
+        with tmppool.get_connection() as con:
+            with con.cursor() as cursor:
+                cursor.execute("SELECT id FROM langchain_embedding")
+                rows = cursor.fetchall()
+                assert len(rows) == 1
+                assert rows[0][0] == "20000000-0000-4000-0000-000000000000"
+
+        await vectorstore.adelete(
+            [
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ]
+        )  # Should not raise on missing ids
+        with tmppool.get_connection() as con:
+            with con.cursor() as cursor:
+                cursor.execute("SELECT id FROM langchain_embedding")
+                rows = cursor.fetchall()
+                assert len(rows) == 0
 
 def test_mariadb_store_delete_collection() -> None:
     """Add and delete documents."""
@@ -439,6 +651,94 @@ def test_mariadb_store_index_documents() -> None:
                     "topic": "zoo",
                 }
 
+@pytest.mark.asyncio
+async def test_amariadb_store_index_documents() -> None:
+    """Test adding duplicate documents results in overwrites."""
+    documents = [
+        Document(
+            page_content="there are cats in the pond",
+            metadata={"id": 1, "location": "pond", "topic": "animals"},
+            id="10000000-0000-4000-0000-000000000000",
+        ),
+        Document(
+            page_content="ducks are also found in the pond",
+            metadata={"id": 2, "location": "pond", "topic": "animals"},
+            id="20000000-0000-4000-0000-000000000000",
+        ),
+        Document(
+            page_content="fresh apples are available at the market",
+            metadata={"id": 3, "location": "market", "topic": "food"},
+            id="30000000-0000-4000-0000-000000000000",
+        ),
+        Document(
+            page_content="the market also sells fresh oranges",
+            metadata={"id": 4, "location": "market", "topic": "food"},
+            id="40000000-0000-4000-0000-000000000000",
+        ),
+        Document(
+            page_content="the new art exhibit is fascinating",
+            metadata={"id": 5, "location": "museum", "topic": "art"},
+            id="50000000-0000-4000-0000-000000000000",
+        ),
+    ]
+    ids: List[str] = [value for doc in documents if (value := doc.id) is not None]
+    with pool() as tmppool:
+        vectorstore = await MariaDBStore.afrom_documents(
+            documents=documents,
+            collection_name="test_collection_filter",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            ids=ids,
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        with tmppool.get_connection() as con:
+            with con.cursor() as cursor:
+                cursor.execute(
+                    "SELECT e.id FROM langchain_embedding e "
+                    "LEFT JOIN langchain_collection c ON e.collection_id = c.id "
+                    "WHERE label = 'test_collection_filter' order by id"
+                )
+                rows = cursor.fetchall()
+                assert sorted(record[0] for record in rows) == [
+                    "10000000-0000-4000-0000-000000000000",
+                    "20000000-0000-4000-0000-000000000000",
+                    "30000000-0000-4000-0000-000000000000",
+                    "40000000-0000-4000-0000-000000000000",
+                    "50000000-0000-4000-0000-000000000000",
+                ]
+
+        # Try to overwrite the first document
+        documents = [
+            Document(
+                page_content="new content in the zoo",
+                metadata={"id": 1, "location": "zoo", "topic": "zoo"},
+                id="10000000-0000-4000-0000-000000000000",
+            ),
+        ]
+
+        await vectorstore.aadd_documents(documents, ids=[doc.id for doc in documents])
+
+        with tmppool.get_connection() as con:
+            with con.cursor() as cursor:
+                cursor.execute(
+                    "SELECT e.id, e.metadata FROM langchain_embedding e "
+                    "LEFT JOIN langchain_collection c ON e.collection_id = c.id "
+                    "WHERE label = 'test_collection_filter' order by id"
+                )
+                rows = cursor.fetchall()
+                assert sorted(record[0] for record in rows) == [
+                    "10000000-0000-4000-0000-000000000000",
+                    "20000000-0000-4000-0000-000000000000",
+                    "30000000-0000-4000-0000-000000000000",
+                    "40000000-0000-4000-0000-000000000000",
+                    "50000000-0000-4000-0000-000000000000",
+                ]
+
+                assert json.loads(rows[0][1]) == {
+                    "id": 1,
+                    "location": "zoo",
+                    "topic": "zoo",
+                }
 
 def test_mariadb_store_relevance_score() -> None:
     """Test to make sure the relevance score is scaled to 0-1."""
@@ -455,6 +755,33 @@ def test_mariadb_store_relevance_score() -> None:
         )
 
         output = docsearch.similarity_search_with_relevance_scores("foo", k=3)
+        docs, scores = zip(*output)
+        _compare_documents(
+            docs,
+            [
+                Document(page_content="foo", metadata={"page": "0"}),
+                Document(page_content="bar", metadata={"page": "1"}),
+                Document(page_content="baz", metadata={"page": "2"}),
+            ],
+        )
+        assert scores == (1.0, 0.9996744261675065, 0.9986996093328621)
+
+@pytest.mark.asyncio
+async def test_amariadb_store_relevance_score() -> None:
+    """Test to make sure the relevance score is scaled to 0-1."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        docsearch = await MariaDBStore.afrom_texts(
+            texts=texts,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+
+        output = await docsearch.asimilarity_search_with_relevance_scores("foo", k=3)
         docs, scores = zip(*output)
         _compare_documents(
             docs,
@@ -486,6 +813,35 @@ def test_mariadb_store_retriever_search_threshold() -> None:
             search_kwargs={"k": 3, "score_threshold": 0.999},
         )
         output = retriever.get_relevant_documents("summer")
+        _compare_documents(
+            output,
+            [
+                Document(page_content="foo", metadata={"page": "0"}),
+                Document(page_content="bar", metadata={"page": "1"}),
+            ],
+        )
+
+
+@pytest.mark.asyncio
+async def test_amariadb_store_retriever_search_threshold() -> None:
+    """Test using retriever for searching with threshold."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        docsearch = await MariaDBStore.afrom_texts(
+            texts=texts,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+
+        retriever = docsearch.as_retriever(
+            search_type="similarity_score_threshold",
+            search_kwargs={"k": 3, "score_threshold": 0.999},
+        )
+        output = await retriever.aget_relevant_documents("summer")
         _compare_documents(
             output,
             [
@@ -533,6 +889,21 @@ def test_mariadb_store_max_marginal_relevance_search() -> None:
         _compare_documents(output, [Document(page_content="foo")])
 
 
+@pytest.mark.asyncio
+async def test_mariadb_store_max_marginal_relevance_search() -> None:
+    """Test max marginal relevance search."""
+    texts = ["foo", "bar", "baz"]
+    with pool() as tmppool:
+        docsearch = await MariaDBStore.afrom_texts(
+            texts=texts,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            pool=tmppool,
+            config=StoreConfig(pre_delete_collection=True),
+        )
+        output = await docsearch.amax_marginal_relevance_search("foo", k=1, fetch_k=3)
+        _compare_documents(output, [Document(page_content="foo")])
+
 def test_mariadb_store_max_marginal_relevance_search_with_score() -> None:
     """Test max marginal relevance search with relevance scores."""
     texts = ["foo", "bar", "baz"]
@@ -552,19 +923,24 @@ def test_mariadb_store_max_marginal_relevance_search_with_score() -> None:
         assert scores == (0.0,)
 
 
-def test_mariadb_store_with_custom_connection() -> None:
-    """Test construction using a custom connection."""
+@pytest.mark.asyncio
+async def test_amariadb_store_max_marginal_relevance_search_with_score() -> None:
+    """Test max marginal relevance search with relevance scores."""
     texts = ["foo", "bar", "baz"]
     with pool() as tmppool:
-        docsearch = MariaDBStore.from_texts(
+        docsearch = await MariaDBStore.afrom_texts(
             texts=texts,
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
-        output = docsearch.similarity_search("foo", k=1)
-        _compare_documents(output, [Document(page_content="foo")])
+        output = await docsearch.amax_marginal_relevance_search_with_score(
+            "foo", k=1, fetch_k=3
+        )
+        docs, scores = zip(*output)
+        _compare_documents(docs, [Document(page_content="foo")])
+        assert scores == (0.0,)
 
 
 # We should reuse this test-case across other integrations

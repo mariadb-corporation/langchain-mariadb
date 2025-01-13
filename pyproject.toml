@@ -29,6 +29,7 @@ optional = true
 
 [tool.poetry.group.test.dependencies]
 pytest = "^7.4.3"
+pytest-asyncio = "^0.23.2"
 pytest-socket = "^0.7.0"
 pytest-cov = "^5.0.0"
 pytest-timeout = "^2.3.1"
@@ -73,6 +74,7 @@ addopts = "--strict-markers --strict-config --durations=5"
 # takemore than 30 seconds.
 timeout = 30
 markers = []
+asyncio_mode = "auto"
 
 [tool.codespell]
 skip = '.git,*.pdf,*.svg,*.pdf,*.yaml,*.ipynb,poetry.lock,*.min.js,*.css,package-lock.json,example_data,_dist,examples,templates,*.trig'

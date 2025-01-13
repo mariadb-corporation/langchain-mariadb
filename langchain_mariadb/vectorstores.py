@@ -25,6 +25,7 @@ import mariadb
 import numpy as np
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
+from langchain_core.runnables.config import run_in_executor
 from langchain_core.vectorstores import VectorStore
 from langchain_core.vectorstores.utils import maximal_marginal_relevance
 
@@ -875,6 +876,38 @@ class MariaDBStore(VectorStore):
             for doc, score in docs_and_scores
         ]
 
+    async def _asimilarity_search_with_relevance_scores(
+            self,
+            query: str,
+            k: int = 4,
+            **kwargs: Any,
+    ) -> List[Tuple[Document, float]]:
+        """Return docs and relevance scores in the range [0, 1].
+
+        Args:
+            query: Input text to search for
+            k: Number of Documents to return (default: 4)
+            **kwargs: Additional arguments including:
+                score_threshold: Optional float between 0 and 1 to filter results
+
+        Returns:
+            List of tuples of (Document, relevance_score) where relevance_score
+            is in the range [0, 1]. 0 is dissimilar, 1 is most similar.
+        """
+        if self.override_relevance_score_fn is None:
+            embedding = self.embeddings.embed_query(query)
+            results = self.__query_with_score_collection(
+                embedding=embedding, k=k, filter=None
+            )
+            docs = self._results_to_docs_and_scores(results)
+            return docs
+
+        docs_and_scores = await self.asimilarity_search_with_score(query, k, **kwargs)
+        return [
+            (doc, self.override_relevance_score_fn(score))
+            for doc, score in docs_and_scores
+        ]
+
     def similarity_search_by_vector(
         self,
         embedding: List[float],
@@ -932,6 +965,31 @@ class MariaDBStore(VectorStore):
             **kwargs,
         )
 
+    async def amax_marginal_relevance_search(
+            self,
+            query: str,
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            filter: Union[None, dict, Expression] = None,
+            **kwargs: Any,
+    ) -> List[Document]:
+        """Return docs selected using maximal marginal relevance.
+
+        Args:
+            query: Text to look up documents similar to
+            k: Number of documents to return (default: 4)
+            fetch_k: Number of documents to fetch before selecting top-k (default: 20)
+            lambda_mult: Balance between relevance and diversity, 0-1 (default: 0.5)
+                0 = maximize diversity, 1 = maximize relevance
+            filter: Optional metadata filter
+            **kwargs: Additional arguments passed to search_by_vector
+
+        Returns:
+            List of Documents selected by maximal marginal relevance
+        """
+        return await run_in_executor(None, self.max_marginal_relevance_search, query,k,fetch_k,lambda_mult,filter,**kwargs)
+
     def max_marginal_relevance_search_with_score(
         self,
         query: str,
@@ -965,6 +1023,17 @@ class MariaDBStore(VectorStore):
             **kwargs,
         )
 
+    async def amax_marginal_relevance_search_with_score(
+            self,
+            query: str,
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            filter: Union[None, dict, Expression] = None,
+            **kwargs: Any,
+    ) -> List[Tuple[Document, float]]:
+        return await run_in_executor(None, self.max_marginal_relevance_search_with_score, query,k,fetch_k,lambda_mult,filter,**kwargs)
+
     def max_marginal_relevance_search_by_vector(
         self,
         embedding: List[float],
@@ -997,6 +1066,19 @@ class MariaDBStore(VectorStore):
             **kwargs,
         )
         return _results_to_docs(docs_and_scores)
+
+
+    async def amax_marginal_relevance_search_by_vector(
+            self,
+            embedding: List[float],
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            filter: Union[None, dict, Expression] = None,
+            **kwargs: Any,
+    ) -> List[Document]:
+        return await run_in_executor(None, self.max_marginal_relevance_search_by_vector, embedding,k,fetch_k,lambda_mult,filter,**kwargs)
+
 
     def max_marginal_relevance_search_with_score_by_vector(
         self,
@@ -1043,6 +1125,18 @@ class MariaDBStore(VectorStore):
         # Convert results to documents with scores
         candidates = self._results_to_docs_and_scores(results)
         return [r for i, r in enumerate(candidates) if i in mmr_selected]
+
+
+    async def amax_marginal_relevance_search_with_score_by_vector(
+            self,
+            embedding: List[float],
+            k: int = 4,
+            fetch_k: int = 20,
+            lambda_mult: float = 0.5,
+            filter: Union[None, dict, Expression] = None,
+            **kwargs: Any,
+    ) -> List[Tuple[Document, float]]:
+        return await run_in_executor(None, self.max_marginal_relevance_search_with_score_by_vector, embedding,k,fetch_k,lambda_mult,filter,**kwargs)
 
     # Query building methods
     def _build_base_select_query(
