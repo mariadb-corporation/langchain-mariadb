@@ -109,6 +109,7 @@ def test_mariadb_store_embeddings() -> None:
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
 
+
 @pytest.mark.asyncio
 async def test_amariadb_store_embeddings() -> None:
     """Test end to end construction with embeddings and search."""
@@ -169,6 +170,7 @@ async def test_amariadb_store_embeddings_config() -> None:
         output = await docsearch.asimilarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
 
+
 def test_mariadb_store_with_metadatas() -> None:
     """Test end to end construction and search."""
     texts = ["foo", "bar", "baz"]
@@ -206,6 +208,7 @@ async def test_amariadb_store_with_metadatas() -> None:
         _compare_documents(
             output, [Document(page_content="foo", metadata={"page": "0"})]
         )
+
 
 def test_mariadb_store_with_metadatas_with_scores() -> None:
     """Test end to end construction and search."""
@@ -265,6 +268,7 @@ def test_mariadb_store_with_filter_match() -> None:
         docs, scores = zip(*output)
         _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
         assert scores == (0.0,)
+
 
 @pytest.mark.asyncio
 async def test_amariadb_store_with_filter_match() -> None:
@@ -406,6 +410,7 @@ def test_mariadb_get_by_ids_format() -> None:
         retrieved_documents = vectorstore.get_by_ids(["blou"])
         assert retrieved_documents == []
 
+
 @pytest.mark.asyncio
 async def test_amariadb_get_by_ids_format() -> None:
     texts = ["foo", "bar", "baz"]
@@ -453,6 +458,7 @@ async def test_amariadb_get_by_ids_format() -> None:
 
         retrieved_documents = await vectorstore.aget_by_ids(["blou"])
         assert retrieved_documents == []
+
 
 def test_mariadb_store_delete_docs() -> None:
     """Add and delete documents."""
@@ -541,6 +547,7 @@ async def test_amariadb_store_delete_docs() -> None:
                 cursor.execute("SELECT id FROM langchain_embedding")
                 rows = cursor.fetchall()
                 assert len(rows) == 0
+
 
 def test_mariadb_store_delete_collection() -> None:
     """Add and delete documents."""
@@ -651,6 +658,7 @@ def test_mariadb_store_index_documents() -> None:
                     "topic": "zoo",
                 }
 
+
 @pytest.mark.asyncio
 async def test_amariadb_store_index_documents() -> None:
     """Test adding duplicate documents results in overwrites."""
@@ -740,6 +748,7 @@ async def test_amariadb_store_index_documents() -> None:
                     "topic": "zoo",
                 }
 
+
 def test_mariadb_store_relevance_score() -> None:
     """Test to make sure the relevance score is scaled to 0-1."""
     texts = ["foo", "bar", "baz"]
@@ -765,6 +774,7 @@ def test_mariadb_store_relevance_score() -> None:
             ],
         )
         assert scores == (1.0, 0.9996744261675065, 0.9986996093328621)
+
 
 @pytest.mark.asyncio
 async def test_amariadb_store_relevance_score() -> None:
@@ -890,7 +900,7 @@ def test_mariadb_store_max_marginal_relevance_search() -> None:
 
 
 @pytest.mark.asyncio
-async def test_mariadb_store_max_marginal_relevance_search() -> None:
+async def test_amariadb_store_max_marginal_relevance_search() -> None:
     """Test max marginal relevance search."""
     texts = ["foo", "bar", "baz"]
     with pool() as tmppool:
@@ -903,6 +913,7 @@ async def test_mariadb_store_max_marginal_relevance_search() -> None:
         )
         output = await docsearch.amax_marginal_relevance_search("foo", k=1, fetch_k=3)
         _compare_documents(output, [Document(page_content="foo")])
+
 
 def test_mariadb_store_max_marginal_relevance_search_with_score() -> None:
     """Test max marginal relevance search with relevance scores."""
