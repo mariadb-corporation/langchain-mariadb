@@ -6,7 +6,7 @@ import enum
 import json
 import logging
 import re
-import struct
+import numpy as np
 import uuid
 from dataclasses import dataclass
 from typing import (
@@ -396,7 +396,6 @@ class MariaDBStore(VectorStore):
         # Initialize core attributes
         self.embedding_function = embeddings
         self._embedding_length = embedding_length
-        self._packer = struct.Struct(f"<{embedding_length}f")
         self.collection_name = collection_name
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
@@ -449,7 +448,7 @@ class MariaDBStore(VectorStore):
         Returns:
             Packed binary representation of the embedding
         """
-        return self._packer.pack(*embedding)
+        return np.float32(embedding).tobytes()
 
     def _binary_to_embedding(self, embedding: bytes) -> List[float] | None:
         """Convert binary data back to embedding vector.
@@ -462,7 +461,7 @@ class MariaDBStore(VectorStore):
         """
         if embedding is None:
             return None
-        return list(self._packer.unpack(embedding))
+        return np.frombuffer(embedding, dtype=np.float32).tolist()
 
     def _validate_id(self, id_: str) -> None:
         """Validate document ID format.
