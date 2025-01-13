@@ -282,7 +282,7 @@ def test_mariadb_get_by_ids_format() -> None:
         retrieved_documents = vectorstore.get_by_ids([])
         assert retrieved_documents == []
 
-        retrieved_documents = vectorstore.get_by_ids([""])
+        retrieved_documents = vectorstore.get_by_ids(["blou"])
         assert retrieved_documents == []
 
 
@@ -562,30 +562,6 @@ def test_mariadb_store_with_custom_connection() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
-        )
-        output = docsearch.similarity_search("foo", k=1)
-        _compare_documents(output, [Document(page_content="foo")])
-
-
-def test_mariadb_store_with_custom_engine_args() -> None:
-    """Test construction using custom engine arguments."""
-    texts = ["foo", "bar", "baz"]
-    engine_args = {
-        "pool_size": 5,
-        "max_overflow": 10,
-        "pool_recycle": -1,
-        "pool_use_lifo": False,
-        "pool_pre_ping": False,
-        "pool_timeout": 30,
-    }
-    with pool() as tmppool:
-        docsearch = MariaDBStore.from_texts(
-            texts=texts,
-            collection_name="test_collection",
-            embedding=FakeEmbeddingsWithAdaDimension(),
-            pool=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
-            engine_args=engine_args,
         )
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])

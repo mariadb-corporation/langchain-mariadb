@@ -1514,6 +1514,7 @@ class MariaDBStore(VectorStore):
             texts,
             embeddings,
             ids,
+            metadatas=metadatas,
             embedding=embedding,
             **kwargs,
         )
@@ -1611,12 +1612,6 @@ class MariaDBStore(VectorStore):
         cls: Type[MariaDBStore],
         documents: List[Document],
         embedding: Embeddings,
-        *,
-        pool: mariadb.ConnectionPool,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
-        ids: Optional[List[str]] = None,
-        config: StoreConfig = StoreConfig(),
         **kwargs: Any,
     ) -> MariaDBStore:
         """Create a MariaDBStore instance from documents.
@@ -1642,10 +1637,5 @@ class MariaDBStore(VectorStore):
             texts=texts,
             embedding=embedding,
             metadatas=metadatas,
-            pool=pool,
-            ids=ids,
-            collection_name=collection_name,
-            distance_strategy=distance_strategy,
-            config=config,
             **kwargs,
         )

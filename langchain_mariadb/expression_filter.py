@@ -146,17 +146,6 @@ class Expression:
         self.right = right
 
 
-class CombinedExpression(Expression):
-    """
-    Represents a boolean filter expression with a specific structure:
-    - Consists of a left operand, an operator, and an optional right operand
-    - Enables construction of complex filtering logic using different types of comparisons
-    """
-
-    def __init__(self, type_: Operator, left: Operand, right: Operand):
-        super(Expression, self).__init__()
-
-
 class Group:
     """
     Represents a grouped collection of filter expressions that should be evaluated together
@@ -258,11 +247,11 @@ class FilterExpressionBuilder:
 
     def both(self, left: Operand, right: Operand) -> Expression:
         """Combine two expressions with AND"""
-        return CombinedExpression(Operator.AND, left, right)
+        return Expression(Operator.AND, left, right)
 
     def either(self, left: Operand, right: Operand) -> Expression:
         """Combine two expressions with OR"""
-        return CombinedExpression(Operator.OR, left, right)
+        return Expression(Operator.OR, left, right)
 
     def negate(self, content: Expression) -> Expression:
         """Negate an expression (i.e. NOT)"""
