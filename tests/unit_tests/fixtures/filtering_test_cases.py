@@ -1,4 +1,5 @@
 """Module needs to move to a stasndalone package."""
+
 from langchain_core.documents import Document
 
 from langchain_mariadb import FilterExpressionBuilder
@@ -416,7 +417,7 @@ TYPE_3_EXP_FILTERING_TEST_CASES = [
         [1, 2],
     ),
     (
-        f.either(f.eq("id", 1), f.eq("name",  "bob")),
+        f.either(f.eq("id", 1), f.eq("name", "bob")),
         [1, 2],
     ),
     (

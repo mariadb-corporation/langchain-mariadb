@@ -1,12 +1,18 @@
 import re
 
-identifier_pattern = re.compile(r'[0-9a-zA-Z$_\u0080-\uFFFF]*', re.UNICODE)
+identifier_pattern = re.compile(r"[0-9a-zA-Z$_\u0080-\uFFFF]*", re.UNICODE)
+
 
 def is_simple_identifier(identifier: str) -> bool:
-    return identifier is not None and len(identifier) > 0 and identifier_pattern.match(identifier) is not None
+    return (
+        identifier is not None
+        and len(identifier) > 0
+        and identifier_pattern.match(identifier) is not None
+    )
+
 
 def enquote_identifier(identifier: str, always_quote: bool = False) -> str:
-    if identifier.find('\u0000') != -1:
+    if identifier.find("\u0000") != -1:
         raise ValueError("Invalid name - containing u0000 character")
 
     if is_simple_identifier(identifier):
@@ -22,7 +28,7 @@ def enquote_identifier(identifier: str, always_quote: bool = False) -> str:
 
         return identifier
     else:
-        if identifier.startswith('`') and identifier.endswith('`'):
+        if identifier.startswith("`") and identifier.endswith("`"):
             identifier = identifier[1:-1]
 
         if len(identifier) < 1 or len(identifier) > 64:

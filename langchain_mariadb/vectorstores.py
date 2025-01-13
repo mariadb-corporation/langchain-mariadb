@@ -1,4 +1,5 @@
 """MariaDB vector store integration for LangChain."""
+
 from __future__ import annotations
 
 import enum
@@ -9,8 +10,16 @@ import struct
 import uuid
 from dataclasses import dataclass
 from typing import (
-    Any, Callable, Dict, Iterable, List, Optional,
-    Sequence, Tuple, Type, Union
+    Any,
+    Callable,
+    Dict,
+    Iterable,
+    List,
+    Optional,
+    Sequence,
+    Tuple,
+    Type,
+    Union,
 )
 
 # Third party
@@ -24,9 +33,15 @@ from langchain_core.vectorstores.utils import maximal_marginal_relevance
 # Local
 from langchain_mariadb._utils import enquote_identifier
 from langchain_mariadb.expression_filter import (
-    BaseFilterExpressionConverter, StringBuilder,
-    Expression, Key, Value, Group, FilterExpressionBuilder
+    BaseFilterExpressionConverter,
+    StringBuilder,
+    Expression,
+    Key,
+    Value,
+    Group,
+    FilterExpressionBuilder,
 )
+
 """
 MariaDBStore is a vector store implementation that uses MariaDB database.
 
@@ -157,23 +172,25 @@ f = FilterExpressionBuilder()
 
 # Operator mappings
 COMPARISONS_TO_NATIVE = {
-    "$eq": f.eq, "$ne": f.ne, "$lt": f.lt,
-    "$lte": f.lte, "$gt": f.gt, "$gte": f.gte,
+    "$eq": f.eq,
+    "$ne": f.ne,
+    "$lt": f.lt,
+    "$lte": f.lte,
+    "$gt": f.gt,
+    "$gte": f.gte,
 }
 
 SPECIAL_CASED_OPERATORS = {
-    "$in": f.includes, "$nin": f.excludes,
-    "$like": f.like, "$nlike": f.nlike,
+    "$in": f.includes,
+    "$nin": f.excludes,
+    "$like": f.like,
+    "$nlike": f.nlike,
 }
 
-LOGICAL_OPERATORS = {
-    "$and": f.both, "$or": f.either, "$not": f.negate
-}
+LOGICAL_OPERATORS = {"$and": f.both, "$or": f.either, "$not": f.negate}
 
 SUPPORTED_OPERATORS = (
-    set(COMPARISONS_TO_NATIVE)
-    .union(LOGICAL_OPERATORS)
-    .union(SPECIAL_CASED_OPERATORS)
+    set(COMPARISONS_TO_NATIVE).union(LOGICAL_OPERATORS).union(SPECIAL_CASED_OPERATORS)
 )
 
 
@@ -182,6 +199,7 @@ SUPPORTED_OPERATORS = (
 # ------------------------------------------------------------------------------
 class DistanceStrategy(str, enum.Enum):
     """Distance strategies for vector similarity."""
+
     EUCLIDEAN = "euclidean"
     COSINE = "cosine"
 
@@ -193,7 +211,9 @@ class MariaDBFilterExpressionConverter(BaseFilterExpressionConverter):
         super().__init__()
         self.metadata_field_name = metadata_field_name
 
-    def convert_expression_to_context(self, expression: Expression, context: StringBuilder) -> None:
+    def convert_expression_to_context(
+        self, expression: Expression, context: StringBuilder
+    ) -> None:
         super().convert_operand_to_context(expression.left, context)
         super().convert_symbol_to_context(expression, context)
         if expression.right:
@@ -202,7 +222,9 @@ class MariaDBFilterExpressionConverter(BaseFilterExpressionConverter):
     def convert_key_to_context(self, key: Key, context: StringBuilder) -> None:
         context.append(f"JSON_VALUE({self.metadata_field_name}, '$.{key.key}')")
 
-    def write_value_range_start(self, _list_value: Value, context: StringBuilder) -> None:
+    def write_value_range_start(
+        self, _list_value: Value, context: StringBuilder
+    ) -> None:
         context.append("(")
 
     def write_value_range_end(self, _list_value: Value, context: StringBuilder) -> None:
@@ -226,13 +248,14 @@ def _results_to_docs(docs_and_scores: Any) -> List[Document]:
 @dataclass
 class TableConfig:
     """Configuration for database table names."""
+
     embedding_table: str
     collection_table: str
 
     def __init__(
         self,
         embedding_table: Optional[str] = None,
-        collection_table: Optional[str] = None
+        collection_table: Optional[str] = None,
     ) -> None:
         """Initialize TableConfig with custom or default table names.
 
@@ -240,11 +263,11 @@ class TableConfig:
             embedding_table: Name for embedding table (default: langchain_embedding)
             collection_table: Name for collection table (default: langchain_collection)
         """
-        self.embedding_table = embedding_table or 'langchain_embedding'
-        self.collection_table = collection_table or 'langchain_collection'
+        self.embedding_table = embedding_table or "langchain_embedding"
+        self.collection_table = collection_table or "langchain_collection"
 
     @classmethod
-    def default(cls) -> 'TableConfig':
+    def default(cls) -> "TableConfig":
         """Create TableConfig with default values."""
         return cls()
 
@@ -252,6 +275,7 @@ class TableConfig:
 @dataclass
 class ColumnConfig:
     """Configuration for database column names."""
+
     # Embedding table columns
     embedding_id: str
     embedding: str
@@ -287,18 +311,18 @@ class ColumnConfig:
             collection_metadata: Name for collection metadata column (default: metadata)
         """
         # Embedding table columns
-        self.embedding_id = embedding_id or 'id'
-        self.embedding = embedding or 'embedding'
-        self.content = content or 'content'
-        self.metadata = metadata or 'metadata'
+        self.embedding_id = embedding_id or "id"
+        self.embedding = embedding or "embedding"
+        self.content = content or "content"
+        self.metadata = metadata or "metadata"
 
         # Collection table columns
-        self.collection_id = collection_id or 'id'
-        self.collection_label = collection_label or 'label'
-        self.collection_metadata = collection_metadata or 'metadata'
+        self.collection_id = collection_id or "id"
+        self.collection_label = collection_label or "label"
+        self.collection_metadata = collection_metadata or "metadata"
 
     @classmethod
-    def default(cls) -> 'ColumnConfig':
+    def default(cls) -> "ColumnConfig":
         """Create ColumnConfig with default values."""
         return cls()
 
@@ -306,6 +330,7 @@ class ColumnConfig:
 @dataclass
 class StoreConfig:
     """Configuration for MariaDBStore."""
+
     tables: TableConfig
     columns: ColumnConfig
     pre_delete_collection: bool
@@ -314,7 +339,7 @@ class StoreConfig:
         self,
         tables: Optional[TableConfig] = None,
         columns: Optional[ColumnConfig] = None,
-        pre_delete_collection: bool = False
+        pre_delete_collection: bool = False,
     ) -> None:
         """Initialize StoreConfig with custom or default configurations.
 
@@ -328,7 +353,7 @@ class StoreConfig:
         self.pre_delete_collection = pre_delete_collection
 
     @classmethod
-    def default(cls) -> 'StoreConfig':
+    def default(cls) -> "StoreConfig":
         """Create StoreConfig with default values."""
         return cls()
 
@@ -371,7 +396,7 @@ class MariaDBStore(VectorStore):
         # Initialize core attributes
         self.embedding_function = embeddings
         self._embedding_length = embedding_length
-        self._packer = struct.Struct(f'<{embedding_length}f')
+        self._packer = struct.Struct(f"<{embedding_length}f")
         self.collection_name = collection_name
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
@@ -389,16 +414,22 @@ class MariaDBStore(VectorStore):
 
         self._collection_table_name = enquote_identifier(config.tables.collection_table)
         self._collection_id_col_name = enquote_identifier(config.columns.collection_id)
-        self._collection_label_col_name = enquote_identifier(config.columns.collection_label)
-        self._collection_meta_col_name = enquote_identifier(config.columns.collection_metadata)
+        self._collection_label_col_name = enquote_identifier(
+            config.columns.collection_label
+        )
+        self._collection_meta_col_name = enquote_identifier(
+            config.columns.collection_metadata
+        )
 
-        self._expression_converter = MariaDBFilterExpressionConverter(self._embedding_meta_col_name)
+        self._expression_converter = MariaDBFilterExpressionConverter(
+            self._embedding_meta_col_name
+        )
 
         # Initialize tables and collection
         self.__post_init__()
 
     def __post_init__(
-            self,
+        self,
     ) -> None:
         """Initialize the store."""
         self.create_tables_if_not_exists()
@@ -442,7 +473,7 @@ class MariaDBStore(VectorStore):
         Raises:
             ValueError: If ID format is invalid
         """
-        if not re.match('^[a-zA-Z0-9_\\-]+$', id_):
+        if not re.match("^[a-zA-Z0-9_\\-]+$", id_):
             raise ValueError(
                 f"ID format can only be alphanumeric with underscore and minus sign, "
                 f"but got value: {id_}"
@@ -452,7 +483,9 @@ class MariaDBStore(VectorStore):
     def create_tables_if_not_exists(self) -> None:
         """Create the necessary database tables if they don't exist."""
         # Create embedding table index name
-        index_name = f"idx_{self._embedding_table_name}_{self._embedding_emb_col_name}_idx"
+        index_name = (
+            f"idx_{self._embedding_table_name}_{self._embedding_emb_col_name}_idx"
+        )
         index_name = re.sub(r"[^0-9a-zA-Z_]", "", index_name)
 
         # Create embedding table
@@ -467,7 +500,9 @@ class MariaDBStore(VectorStore):
         )
 
         # Create collection table index names
-        col_uniq_key_name = f"idx_{self._collection_table_name}_{self._collection_label_col_name}"
+        col_uniq_key_name = (
+            f"idx_{self._collection_table_name}_{self._collection_label_col_name}"
+        )
         col_index_name = f"{self._embedding_table_name}_collection_id_fkey"
         col_uniq_key_name = re.sub(r"[^0-9a-zA-Z_]", "", col_uniq_key_name)
         col_index_name = re.sub(r"[^0-9a-zA-Z_]", "", col_index_name)
@@ -525,7 +560,7 @@ class MariaDBStore(VectorStore):
                 cursor.execute(
                     f"SELECT {self._collection_id_col_name} FROM {self._collection_table_name} "
                     f"WHERE {self._collection_label_col_name}=?",
-                    (self.collection_name,)
+                    (self.collection_name,),
                 )
                 row = cursor.fetchone()
 
@@ -540,8 +575,7 @@ class MariaDBStore(VectorStore):
                     f"VALUES (?,?) RETURNING {self._collection_id_col_name}"
                 )
                 cursor.execute(
-                    query,
-                    (self.collection_name, json.dumps(self.collection_metadata))
+                    query, (self.collection_name, json.dumps(self.collection_metadata))
                 )
                 row = cursor.fetchone()
                 self._collection_id = row[0]
@@ -556,7 +590,7 @@ class MariaDBStore(VectorStore):
                     cursor.execute(
                         f"SELECT {self._collection_id_col_name} FROM {self._collection_table_name} "
                         f"WHERE {self._collection_label_col_name}=?",
-                        (self.collection_name,)
+                        (self.collection_name,),
                     )
                     row = cursor.fetchone()
 
@@ -565,12 +599,12 @@ class MariaDBStore(VectorStore):
                         # Delete associated embeddings and collection
                         cursor.execute(
                             f"DELETE FROM {self._embedding_table_name} WHERE collection_id = ?",
-                            (collection_id,)
+                            (collection_id,),
                         )
                         cursor.execute(
                             f"DELETE FROM {self._collection_table_name} "
                             f"WHERE {self._collection_id_col_name} = ?",
-                            (collection_id,)
+                            (collection_id,),
                         )
                 except Exception as e:
                     self.logger.debug("Failed to delete previous collection")
@@ -597,7 +631,7 @@ class MariaDBStore(VectorStore):
                 cursor.executemany(
                     f"DELETE FROM {self._embedding_table_name} "
                     f"WHERE {self._embedding_id_col_name} = ?",
-                    data
+                    data,
                 )
                 con.commit()
 
@@ -670,7 +704,7 @@ class MariaDBStore(VectorStore):
                 if _id is None:
                     ids_.append(str(uuid.uuid4()))
                 else:
-                    if not re.match('^[a-zA-Z0-9_\\-]+$', _id):
+                    if not re.match("^[a-zA-Z0-9_\\-]+$", _id):
                         raise ValueError(
                             f"ID format can only be alphanumeric with underscore and minus sign, "
                             f"but got value: {_id}"
@@ -685,9 +719,19 @@ class MariaDBStore(VectorStore):
         with self._pool.get_connection() as con:
             with con.cursor() as cursor:
                 data = []
-                for text, metadata, embedding, id_ in zip(texts, metadatas, embeddings, ids_):
+                for text, metadata, embedding, id_ in zip(
+                    texts, metadatas, embeddings, ids_
+                ):
                     binary_emb = self._embedding_to_binary(embedding)
-                    data.append((id_, text, json.dumps(metadata), binary_emb, self._collection_id))
+                    data.append(
+                        (
+                            id_,
+                            text,
+                            json.dumps(metadata),
+                            binary_emb,
+                            self._collection_id,
+                        )
+                    )
 
                 query = (
                     f"INSERT INTO {self._embedding_table_name} ("
@@ -708,11 +752,11 @@ class MariaDBStore(VectorStore):
         return ids_
 
     def add_texts(
-            self,
-            texts: Iterable[str],
-            metadatas: Optional[List[dict]] = None,
-            ids: Optional[List[str]] = None,
-            **kwargs: Any,
+        self,
+        texts: Iterable[str],
+        metadatas: Optional[List[dict]] = None,
+        ids: Optional[List[str]] = None,
+        **kwargs: Any,
     ) -> List[str]:
         """Run more texts through the embeddings and add to the vectorstore.
 
@@ -779,9 +823,7 @@ class MariaDBStore(VectorStore):
         """
         embedding = self.embeddings.embed_query(query)
         docs = self.similarity_search_with_score_by_vector(
-            embedding=embedding,
-            k=k,
-            filter=filter
+            embedding=embedding, k=k, filter=filter
         )
         return docs
 
@@ -825,9 +867,7 @@ class MariaDBStore(VectorStore):
         if self.override_relevance_score_fn is None:
             embedding = self.embeddings.embed_query(query)
             results = self.__query_with_score_collection(
-                embedding=embedding,
-                k=k,
-                filter=None
+                embedding=embedding, k=k, filter=None
             )
             docs = self._results_to_docs_and_scores(results)
             return docs
@@ -842,7 +882,7 @@ class MariaDBStore(VectorStore):
         self,
         embedding: List[float],
         k: int = 4,
-        filter: Optional[dict] = None,
+        filter: Union[None, dict, Expression] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
@@ -857,9 +897,7 @@ class MariaDBStore(VectorStore):
             List of Documents most similar to the query vector
         """
         docs_and_scores = self.similarity_search_with_score_by_vector(
-            embedding=embedding,
-            k=k,
-            filter=filter
+            embedding=embedding, k=k, filter=filter
         )
         return _results_to_docs(docs_and_scores)
 
@@ -870,7 +908,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Optional[Dict[str, str]] = None,
+        filter: Union[None, dict, Expression] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using maximal marginal relevance.
@@ -903,7 +941,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Optional[dict] = None,
+        filter: Union[None, dict, Expression] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using maximal marginal relevance with scores.
@@ -936,7 +974,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Optional[Dict[str, str]] = None,
+        filter: Union[None, dict, Expression] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using maximal marginal relevance.
@@ -969,7 +1007,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Optional[Dict[str, str]] = None,
+        filter: Union[None, dict, Expression] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using maximal marginal relevance with scores.
@@ -991,17 +1029,11 @@ class MariaDBStore(VectorStore):
         """
         # Fetch candidates with embeddings
         results = self.__query_collection(
-            embedding=embedding,
-            k=fetch_k,
-            filter=filter,
-            need_embeddings=True
+            embedding=embedding, k=fetch_k, filter=filter, need_embeddings=True
         )
 
         # Extract embeddings from results
-        embedding_list = [
-            self._binary_to_embedding(result[4])
-            for result in results
-        ]
+        embedding_list = [self._binary_to_embedding(result[4]) for result in results]
 
         # Calculate MMR selection
         mmr_selected = maximal_marginal_relevance(
@@ -1060,9 +1092,7 @@ class MariaDBStore(VectorStore):
         """Query the collection for similar documents."""
         distance_expr = f"vec_distance_{self._distance_strategy}({self._embedding_emb_col_name}, ?) as distance"
         base_query, filter_sql = self._build_base_select_query(
-            distance_expr,
-            need_embeddings,
-            filter
+            distance_expr, need_embeddings, filter
         )
 
         query = (
@@ -1072,11 +1102,7 @@ class MariaDBStore(VectorStore):
             f"ORDER BY distance ASC LIMIT ?"
         )
 
-        return self.__inner_query_collection(
-            embedding=embedding,
-            k=k,
-            query_=query
-        )
+        return self.__inner_query_collection(embedding=embedding, k=k, query_=query)
 
     def __query_with_score_collection(
         self,
@@ -1087,13 +1113,14 @@ class MariaDBStore(VectorStore):
         """Query the collection and return results with similarity scores."""
         # Calculate similarity score based on distance strategy
         if self._distance_strategy == DistanceStrategy.COSINE:
-            score_expr = f"1.0 - vec_distance_cosine({self._embedding_emb_col_name}, ?) as score"
+            score_expr = (
+                f"1.0 - vec_distance_cosine({self._embedding_emb_col_name}, ?) as score"
+            )
         else:
             score_expr = f"1.0 - vec_distance_cosine({self._embedding_emb_col_name}, ?) / SQRT(2) as score"
 
         base_query, filter_sql = self._build_base_select_query(
-            score_expr,
-            filter=filter
+            score_expr, filter=filter
         )
 
         query = (
@@ -1103,11 +1130,7 @@ class MariaDBStore(VectorStore):
             f"ORDER BY score DESC LIMIT ?"
         )
 
-        return self.__inner_query_collection(
-            embedding=embedding,
-            k=k,
-            query_=query
-        )
+        return self.__inner_query_collection(embedding=embedding, k=k, query_=query)
 
     def __inner_query_collection(
         self,
@@ -1136,7 +1159,7 @@ class MariaDBStore(VectorStore):
         self,
         field: str,
         value: Any,
-    ) -> Expression | Group:
+    ) -> Expression:
         """Create a filter for a specific field.
 
         Args:
@@ -1163,7 +1186,9 @@ class MariaDBStore(VectorStore):
 
         # Allow [a-zA-Z0-9_], disallow $ for now until we support escape characters
         if not field.isidentifier():
-            raise ValueError(f"Invalid field name: {field}. Expected a valid identifier.")
+            raise ValueError(
+                f"Invalid field name: {field}. Expected a valid identifier."
+            )
 
         if isinstance(value, dict):
             # This is a filter specification
@@ -1191,9 +1216,13 @@ class MariaDBStore(VectorStore):
             if operator in {"$in", "$nin"}:
                 for val in filter_value:
                     if not isinstance(val, (str, int, float)):
-                        raise NotImplementedError(f"Unsupported type: {type(val)} for value: {val}")
+                        raise NotImplementedError(
+                            f"Unsupported type: {type(val)} for value: {val}"
+                        )
                     if isinstance(val, bool):
-                        raise NotImplementedError(f"Unsupported type: {type(val)} for value: {val}")
+                        raise NotImplementedError(
+                            f"Unsupported type: {type(val)} for value: {val}"
+                        )
             else:
                 for val in filter_value:
                     if not isinstance(val, str):
@@ -1211,12 +1240,10 @@ class MariaDBStore(VectorStore):
         exp = self._create_filter_clause(filters)
         if exp is None:
             return ""
-        sql = self._expression_converter.convert_expression(exp)
-        return sql
+        return self._expression_converter.convert_expression(exp)
 
     def _create_filter_clause(
-        self,
-        filters: Union[None, dict, Expression] = None
+        self, filters: Union[None, dict, Expression] = None
     ) -> Expression | None:
         """Create a filter clause from the provided filters.
 
@@ -1259,15 +1286,28 @@ class MariaDBStore(VectorStore):
                         )
 
                     # Build AND chain
-                    val0 = self._create_filter_clause(value[0])
-                    exp = self._create_filter_clause(value[1])
+                    val0 = self._ensureValue(self._create_filter_clause(value[0]))
+                    exp = self._ensureValue(self._create_filter_clause(value[1]))
 
                     _len = len(value)
                     while _len > 2:
-                        exp = f.both(
-                            self._create_filter_clause(value[_len - 1]),
-                            self._create_filter_clause(value[_len - 2])
-                        )
+                        v1 = self._create_filter_clause(value[_len - 1])
+                        v2 = self._create_filter_clause(value[_len - 2])
+                        if v1 is None:
+                            if v2 is not None:
+                                exp = v2
+                        else:
+                            if v2 is None:
+                                exp = v1
+                            else:
+                                exp = f.both(
+                                    self._ensureValue(
+                                        self._create_filter_clause(value[_len - 1])
+                                    ),
+                                    self._ensureValue(
+                                        self._create_filter_clause(value[_len - 2])
+                                    ),
+                                )
                         _len = _len - 1
 
                     return f.both(val0, exp)
@@ -1280,29 +1320,37 @@ class MariaDBStore(VectorStore):
                         )
 
                     # Build OR chain
-                    val0 = self._create_filter_clause(value[0])
-                    exp = self._create_filter_clause(value[1])
+                    val0 = self._ensureValue(self._create_filter_clause(value[0]))
+                    exp = self._ensureValue(self._create_filter_clause(value[1]))
 
                     _len = len(value)
                     while _len > 2:
                         exp = f.either(
-                            self._create_filter_clause(value[_len - 1]),
-                            self._create_filter_clause(value[_len - 2])
+                            self._ensureValue(
+                                self._create_filter_clause(value[_len - 1])
+                            ),
+                            self._ensureValue(
+                                self._create_filter_clause(value[_len - 2])
+                            ),
                         )
                         _len = _len - 1
 
                     return f.either(val0, exp)
 
-                elif key.lower() == "$not":
+                else:  # key.lower() == "$not":
                     # Handle NOT operator
                     if isinstance(value, Expression):
                         return f.negate(value)
                     if isinstance(value, dict):
-                        return f.negate(self._create_filter_clause(value))
+                        return f.negate(
+                            self._ensureValue(self._create_filter_clause(value))
+                        )
                     if isinstance(value, list) and len(value) == 1:
                         value = value[0]
                         if isinstance(value, (Expression, dict)):
-                            return f.negate(self._create_filter_clause(value))
+                            return f.negate(
+                                self._ensureValue(self._create_filter_clause(value))
+                            )
 
                     raise ValueError(
                         f"Invalid filter condition for $not. Expected Expression, dict, "
@@ -1317,8 +1365,7 @@ class MariaDBStore(VectorStore):
                             f"Invalid filter condition. Expected a field but got: {key}"
                         )
                 expressions = [
-                    self._handle_field_filter(k, v)
-                    for k, v in filters.items()
+                    self._handle_field_filter(k, v) for k, v in filters.items()
                 ]
                 if len(expressions) > 1:
                     return f.both(expressions[0], expressions[1])
@@ -1333,11 +1380,13 @@ class MariaDBStore(VectorStore):
                 f"Invalid filter type: Expected dict or Expression but got {type(filters)}"
             )
 
+    def _ensureValue(self, val: Expression | None) -> Expression:
+        if val is None:
+            raise ValueError("Invalid filter value: Expected Expression, but got None")
+        return val
+
     # Result processing methods
-    def _results_to_docs_and_scores(
-        self,
-        results: Any
-    ) -> List[Tuple[Document, float]]:
+    def _results_to_docs_and_scores(self, results: Any) -> List[Tuple[Document, float]]:
         """Convert raw results to documents and scores.
 
         Args:
@@ -1421,7 +1470,7 @@ class MariaDBStore(VectorStore):
             logger=logger,
             relevance_score_fn=relevance_score_fn,
             config=config,
-            **kwargs
+            **kwargs,
         )
 
         # Add embeddings to store
@@ -1437,13 +1486,6 @@ class MariaDBStore(VectorStore):
         metadatas: Optional[List[dict]] = None,
         *,
         ids: Optional[List[str]] = None,
-        pool: mariadb.ConnectionPool,
-        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
-        distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
-        embedding_length: Optional[int] = None,
-        config: StoreConfig = StoreConfig(),
-        logger: Optional[logging.Logger] = None,
-        relevance_score_fn: Optional[Callable[[float], float]] = None,
         **kwargs: Any,
     ) -> MariaDBStore:
         """Create a MariaDBStore instance from texts.
@@ -1467,23 +1509,14 @@ class MariaDBStore(VectorStore):
         """
         embeddings = embedding.embed_documents(list(texts))
 
-        emb_len = embedding_length
-        if embedding_length is None and embeddings:
-            emb_len = len(embeddings[0])
-
-        store = cls(
-            embedding,
-            emb_len,
-            pool=pool,
-            config=config,
-            logger=logger,
-            relevance_score_fn=relevance_score_fn,
-            collection_name=collection_name,
-            distance_strategy=distance_strategy,
+        # Create store instance
+        return cls.__from(
+            texts,
+            embeddings,
+            ids,
+            embedding=embedding,
+            **kwargs,
         )
-
-        store.add_embeddings(texts, embeddings, metadatas, ids, **kwargs)
-        return store
 
     @classmethod
     def from_embeddings(

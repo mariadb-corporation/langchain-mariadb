@@ -1,4 +1,5 @@
 """Test MariaDBStore functionality."""
+
 import contextlib
 import json
 from typing import Any, Dict, Generator, List, Optional, Sequence
@@ -9,7 +10,8 @@ from langchain_core.embeddings import Embeddings
 
 from langchain_mariadb.vectorstores import (
     SUPPORTED_OPERATORS,
-    MariaDBStore, StoreConfig,
+    MariaDBStore,
+    StoreConfig,
 )
 from tests.unit_tests.fake_embeddings import FakeEmbeddings
 from tests.unit_tests.fixtures.filtering_test_cases import (
@@ -67,6 +69,7 @@ def test_mariadbstore() -> None:
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
 
+
 def test_mariadb_store_embeddings() -> None:
     """Test end to end construction with embeddings and search."""
     texts = ["foo", "bar", "baz"]
@@ -83,12 +86,12 @@ def test_mariadb_store_embeddings() -> None:
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
 
-def test_mariadb_store_embeddings_config() -> None:
 
+def test_mariadb_store_embeddings_config() -> None:
     store_config = StoreConfig()
-    store_config.pre_delete_collection=True
-    store_config.tables.embedding_table='emb_table'
-    store_config.tables.collection_table='col_table'
+    store_config.pre_delete_collection = True
+    store_config.tables.embedding_table = "emb_table"
+    store_config.tables.collection_table = "col_table"
 
     texts = ["foo", "bar", "baz"]
     text_embeddings = FakeEmbeddingsWithAdaDimension().embed_documents(texts)
@@ -119,7 +122,9 @@ def test_mariadb_store_with_metadatas() -> None:
             config=StoreConfig(pre_delete_collection=True),
         )
         output = docsearch.similarity_search("foo", k=1)
-        _compare_documents(output, [Document(page_content="foo", metadata={"page": "0"})])
+        _compare_documents(
+            output, [Document(page_content="foo", metadata={"page": "0"})]
+        )
 
 
 def test_mariadb_store_with_metadatas_with_scores() -> None:
@@ -140,6 +145,7 @@ def test_mariadb_store_with_metadatas_with_scores() -> None:
         _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
         assert scores == (0.0,)
 
+
 def test_mariadb_store_with_filter_match() -> None:
     """Test end to end construction and search."""
     texts = ["foo", "bar", "baz"]
@@ -153,7 +159,9 @@ def test_mariadb_store_with_filter_match() -> None:
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
-        output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "0"})
+        output = docsearch.similarity_search_with_score(
+            "foo", k=1, filter={"page": "0"}
+        )
         docs, scores = zip(*output)
         _compare_documents(docs, [Document(page_content="foo", metadata={"page": "0"})])
         assert scores == (0.0,)
@@ -172,11 +180,12 @@ def test_mariadb_store_with_filter_distant_match() -> None:
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
-        output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "2"})
+        output = docsearch.similarity_search_with_score(
+            "foo", k=1, filter={"page": "2"}
+        )
         docs, scores = zip(*output)
         _compare_documents(docs, [Document(page_content="baz", metadata={"page": "2"})])
         assert scores == (0.0013003906671379406,)
-
 
 
 def test_mariadb_store_with_filter_no_match() -> None:
@@ -192,8 +201,11 @@ def test_mariadb_store_with_filter_no_match() -> None:
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
-        output = docsearch.similarity_search_with_score("foo", k=1, filter={"page": "5"})
+        output = docsearch.similarity_search_with_score(
+            "foo", k=1, filter={"page": "5"}
+        )
         assert output == []
+
 
 def test_mariadb_store_collection_with_metadata() -> None:
     """Test end to end collection construction"""
@@ -201,8 +213,8 @@ def test_mariadb_store_collection_with_metadata() -> None:
         with tmppool.get_connection() as con:
             with con.cursor() as cursor:
                 try:
-                    cursor.execute('TRUNCATE TABLE langchain_embedding')
-                    cursor.execute('DELETE FROM langchain_collection')
+                    cursor.execute("TRUNCATE TABLE langchain_embedding")
+                    cursor.execute("DELETE FROM langchain_collection")
                     con.commit()
                 except Exception as e:
                     print("fail to truncate")
@@ -217,7 +229,7 @@ def test_mariadb_store_collection_with_metadata() -> None:
 
         with tmppool.get_connection() as con:
             with con.cursor() as cursor:
-                cursor.execute('SELECT label,metadata  FROM langchain_collection')
+                cursor.execute("SELECT label,metadata  FROM langchain_collection")
                 row = cursor.fetchone()
                 if row is None:
                     assert False, "Expected a collection to exists but received None"
@@ -239,7 +251,11 @@ def test_mariadb_get_by_ids_format() -> None:
             collection_name="test_collection_filter",
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
-            ids=["00000000-0000-4000-0000-000000000000", "10000000-0000-4000-0000-000000000000", "20000000-0000-4000-0000-000000000000"],
+            ids=[
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ],
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
@@ -266,8 +282,9 @@ def test_mariadb_get_by_ids_format() -> None:
         retrieved_documents = vectorstore.get_by_ids([])
         assert retrieved_documents == []
 
-        retrieved_documents = vectorstore.get_by_ids([None])
+        retrieved_documents = vectorstore.get_by_ids([""])
         assert retrieved_documents == []
+
 
 def test_mariadb_store_delete_docs() -> None:
     """Add and delete documents."""
@@ -279,22 +296,36 @@ def test_mariadb_store_delete_docs() -> None:
             collection_name="test_collection_filter",
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
-            ids=["00000000-0000-4000-0000-000000000000", "10000000-0000-4000-0000-000000000000", "20000000-0000-4000-0000-000000000000"],
+            ids=[
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ],
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
-        vectorstore.delete(["00000000-0000-4000-0000-000000000000", "10000000-0000-4000-0000-000000000000"])
+        vectorstore.delete(
+            [
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+            ]
+        )
         with tmppool.get_connection() as con:
             with con.cursor() as cursor:
-                cursor.execute('SELECT id FROM langchain_embedding')
+                cursor.execute("SELECT id FROM langchain_embedding")
                 rows = cursor.fetchall()
                 assert len(rows) == 1
                 assert rows[0][0] == "20000000-0000-4000-0000-000000000000"
 
-        vectorstore.delete(["10000000-0000-4000-0000-000000000000", "20000000-0000-4000-0000-000000000000"])  # Should not raise on missing ids
+        vectorstore.delete(
+            [
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ]
+        )  # Should not raise on missing ids
         with tmppool.get_connection() as con:
             with con.cursor() as cursor:
-                cursor.execute('SELECT id FROM langchain_embedding')
+                cursor.execute("SELECT id FROM langchain_embedding")
                 rows = cursor.fetchall()
                 assert len(rows) == 0
 
@@ -309,7 +340,11 @@ def test_mariadb_store_delete_collection() -> None:
             collection_name="test_collection_filter",
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
-            ids=["00000000-0000-4000-0000-000000000000", "10000000-0000-4000-0000-000000000000", "20000000-0000-4000-0000-000000000000"],
+            ids=[
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ],
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
@@ -345,21 +380,23 @@ def test_mariadb_store_index_documents() -> None:
             id="50000000-0000-4000-0000-000000000000",
         ),
     ]
-
+    ids: List[str] = [value for doc in documents if (value := doc.id) is not None]
     with pool() as tmppool:
         vectorstore = MariaDBStore.from_documents(
             documents=documents,
             collection_name="test_collection_filter",
             embedding=FakeEmbeddingsWithAdaDimension(),
-            ids=[doc.id for doc in documents],
+            ids=ids,
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
         with tmppool.get_connection() as con:
             with con.cursor() as cursor:
-                cursor.execute("SELECT e.id FROM langchain_embedding e "
-                                    "LEFT JOIN langchain_collection c ON e.collection_id = c.id "
-                                    "WHERE label = 'test_collection_filter' order by id")
+                cursor.execute(
+                    "SELECT e.id FROM langchain_embedding e "
+                    "LEFT JOIN langchain_collection c ON e.collection_id = c.id "
+                    "WHERE label = 'test_collection_filter' order by id"
+                )
                 rows = cursor.fetchall()
                 assert sorted(record[0] for record in rows) == [
                     "10000000-0000-4000-0000-000000000000",
@@ -382,10 +419,11 @@ def test_mariadb_store_index_documents() -> None:
 
         with tmppool.get_connection() as con:
             with con.cursor() as cursor:
-
-                cursor.execute("SELECT e.id, e.metadata FROM langchain_embedding e "
+                cursor.execute(
+                    "SELECT e.id, e.metadata FROM langchain_embedding e "
                     "LEFT JOIN langchain_collection c ON e.collection_id = c.id "
-                    "WHERE label = 'test_collection_filter' order by id")
+                    "WHERE label = 'test_collection_filter' order by id"
+                )
                 rows = cursor.fetchall()
                 assert sorted(record[0] for record in rows) == [
                     "10000000-0000-4000-0000-000000000000",
@@ -428,6 +466,7 @@ def test_mariadb_store_relevance_score() -> None:
         )
         assert scores == (1.0, 0.9996744261675065, 0.9986996093328621)
 
+
 def test_mariadb_store_retriever_search_threshold() -> None:
     """Test using retriever for searching with threshold."""
     texts = ["foo", "bar", "baz"]
@@ -454,6 +493,7 @@ def test_mariadb_store_retriever_search_threshold() -> None:
                 Document(page_content="bar", metadata={"page": "1"}),
             ],
         )
+
 
 def test_mariadb_store_retriever_search_threshold_custom_normalization_fn() -> None:
     """Test searching with threshold and custom normalization function"""
@@ -492,6 +532,7 @@ def test_mariadb_store_max_marginal_relevance_search() -> None:
         output = docsearch.max_marginal_relevance_search("foo", k=1, fetch_k=3)
         _compare_documents(output, [Document(page_content="foo")])
 
+
 def test_mariadb_store_max_marginal_relevance_search_with_score() -> None:
     """Test max marginal relevance search with relevance scores."""
     texts = ["foo", "bar", "baz"]
@@ -503,10 +544,13 @@ def test_mariadb_store_max_marginal_relevance_search_with_score() -> None:
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
         )
-        output = docsearch.max_marginal_relevance_search_with_score("foo", k=1, fetch_k=3)
+        output = docsearch.max_marginal_relevance_search_with_score(
+            "foo", k=1, fetch_k=3
+        )
         docs, scores = zip(*output)
         _compare_documents(docs, [Document(page_content="foo")])
         assert scores == (0.0,)
+
 
 def test_mariadb_store_with_custom_connection() -> None:
     """Test construction using a custom connection."""
@@ -568,12 +612,13 @@ def get_vectorstore(
             collection_name="test_collection",
             pool=tmppool,
             config=StoreConfig(pre_delete_collection=True),
-            relevance_score_fn=lambda d: d * 0
+            relevance_score_fn=lambda d: d * 0,
         )
         try:
             yield store
         finally:
             store.drop_tables()
+
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_1(
@@ -584,6 +629,7 @@ def test_mariadb_store_with_with_metadata_filters_1(
     with get_vectorstore() as MariaDBStore:
         docs = MariaDBStore.similarity_search("meow", k=5, filter=test_filter)
         assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
+
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_2(
@@ -606,6 +652,7 @@ def test_mariadb_store_with_with_metadata_filters_3(
     docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
     assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
 
+
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_4_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_4(
     mariadb_store,
@@ -615,6 +662,7 @@ def test_mariadb_store_with_with_metadata_filters_4(
     """Test end to end construction and search."""
     docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
     assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
+
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_5_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_5(
@@ -629,19 +677,20 @@ def test_mariadb_store_with_with_metadata_filters_5(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_EXP_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_exp_1(
-        test_filter: Dict[str, Any],
-        expected_ids: List[int],
+    test_filter: Dict[str, Any],
+    expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     with get_vectorstore() as MariaDBStore:
         docs = MariaDBStore.similarity_search("meow", k=5, filter=test_filter)
         assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
 
+
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_EXP_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_exp_2(
-        mariadb_store,
-        test_filter: Dict[str, Any],
-        expected_ids: List[int],
+    mariadb_store,
+    test_filter: Dict[str, Any],
+    expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
@@ -650,29 +699,31 @@ def test_mariadb_store_with_with_metadata_filters_exp_2(
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_3_EXP_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_exp_3(
-        mariadb_store,
-        test_filter: Dict[str, Any],
-        expected_ids: List[int],
+    mariadb_store,
+    test_filter: Dict[str, Any],
+    expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
     assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
+
 
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_4_EXP_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_exp_4(
-        mariadb_store,
-        test_filter: Dict[str, Any],
-        expected_ids: List[int],
+    mariadb_store,
+    test_filter: Dict[str, Any],
+    expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
     assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
 
+
 @pytest.mark.parametrize("test_filter, expected_ids", TYPE_5_EXP_FILTERING_TEST_CASES)
 def test_mariadb_store_with_with_metadata_filters_exp_5(
-        mariadb_store,
-        test_filter: Dict[str, Any],
-        expected_ids: List[int],
+    mariadb_store,
+    test_filter: Dict[str, Any],
+    expected_ids: List[int],
 ) -> None:
     """Test end to end construction and search."""
     docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
@@ -719,4 +770,3 @@ def test_validate_operators() -> None:
         "$not",
         "$or",
     ]
-

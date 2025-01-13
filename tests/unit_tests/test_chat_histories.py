@@ -13,9 +13,7 @@ def test_sync_chat_history() -> None:
         MariaDBChatMessageHistory.drop_table(tmppool, table_name)
         MariaDBChatMessageHistory.create_tables(tmppool, table_name)
 
-        chat_history = MariaDBChatMessageHistory(
-            table_name, session_id, pool=tmppool
-        )
+        chat_history = MariaDBChatMessageHistory(table_name, session_id, pool=tmppool)
 
         messages = chat_history.messages
         assert messages == []
@@ -64,4 +62,3 @@ def test_sync_chat_history() -> None:
 
         chat_history.clear()
         assert chat_history.messages == []
-

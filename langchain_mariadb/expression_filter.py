@@ -72,11 +72,15 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 
 # Type aliases
-ValueType = Union[int, str, bool, Sequence[int], Sequence[str], Sequence[bool]]
-Operand = Union['Key', 'Value', 'Expression', 'Group']
+ValueType = Union[
+    int, str, bool, float, Sequence[int], Sequence[str], Sequence[bool], Sequence[float]
+]
+Operand = Union["Key", "Value", "Expression", "Group"]
+
 
 class Operator(Enum):
     """Enumeration of supported filter operations"""
+
     AND = auto()
     OR = auto()
     EQ = auto()
@@ -90,6 +94,7 @@ class Operator(Enum):
     IN = auto()
     NIN = auto()
     NOT = auto()
+
 
 # Operator negation mapping
 TYPE_NEGATION_MAP = {
@@ -107,8 +112,10 @@ TYPE_NEGATION_MAP = {
     Operator.NOT: Operator.NOT,
 }
 
+
 class Key:
     """Represents a key in a filter expression"""
+
     def __init__(self, key: str):
         if not isinstance(key, str):
             raise TypeError(f"Key must be a string, got {type(key)}")
@@ -116,12 +123,15 @@ class Key:
             raise ValueError("Key cannot be empty")
         self.key = key
 
+
 class Value:
     """Represents a value in a filter expression"""
+
     def __init__(self, value: ValueType):
         if not isinstance(value, (int, str, float, bool, Sequence)):
             raise TypeError(f"Unsupported value type: {type(value)}")
         self.value = value
+
 
 class Expression:
     """
@@ -129,10 +139,23 @@ class Expression:
     - Consists of a left operand, an operator, and an optional right operand
     - Enables construction of complex filtering logic using different types of comparisons
     """
+
     def __init__(self, type_: Operator, left: Operand, right: Optional[Operand] = None):
         self.type = type_
         self.left = left
         self.right = right
+
+
+class CombinedExpression(Expression):
+    """
+    Represents a boolean filter expression with a specific structure:
+    - Consists of a left operand, an operator, and an optional right operand
+    - Enables construction of complex filtering logic using different types of comparisons
+    """
+
+    def __init__(self, type_: Operator, left: Operand, right: Operand):
+        super(Expression, self).__init__()
+
 
 class Group:
     """
@@ -140,26 +163,30 @@ class Group:
     - Enables creating complex, nested filtering logic with specific evaluation precedence
     - Analogous to parentheses in mathematical or logical expressions
     """
+
     def __init__(self, content: Expression):
         self.content = content
 
+
 class StringBuilder:
     """Simple StringBuilder implementation for efficient string concatenation"""
-    def __init__(self):
+
+    def __init__(self) -> None:
         self.buffer: List[str] = []
         self._length: int = 0
-    
+
     def append(self, string: str) -> None:
         if not isinstance(string, str):
             raise TypeError(f"Can only append strings, got {type(string)}")
         self.buffer.append(string)
         self._length += len(string)
-    
+
     def __str__(self) -> str:
         return "".join(self.buffer)
-    
+
     def __len__(self) -> int:
         return self._length
+
 
 class FilterExpressionBuilder:
     """
@@ -174,51 +201,76 @@ class FilterExpressionBuilder:
     """
 
     def eq(self, key: str, value: ValueType) -> Expression:
-        return Expression(Operator.EQ, Key(key), Value(value) if value is not None else None)
+        return Expression(
+            Operator.EQ, Key(key), Value(value) if value is not None else None
+        )
 
     def ne(self, key: str, value: ValueType) -> Expression:
-        return Expression(Operator.NE, Key(key), Value(value) if value is not None else None)
+        return Expression(
+            Operator.NE, Key(key), Value(value) if value is not None else None
+        )
 
     def gt(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(Operator.GT, Key(key), Value(value) if value is not None else None)
+        return Expression(
+            Operator.GT, Key(key), Value(value) if value is not None else None
+        )
 
     def gte(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(Operator.GTE, Key(key), Value(value) if value is not None else None)
+        return Expression(
+            Operator.GTE, Key(key), Value(value) if value is not None else None
+        )
 
     def lt(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(Operator.LT, Key(key), Value(value) if value is not None else None)
+        return Expression(
+            Operator.LT, Key(key), Value(value) if value is not None else None
+        )
 
     def lte(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(Operator.LTE, Key(key), Value(value) if value is not None else None)
+        return Expression(
+            Operator.LTE, Key(key), Value(value) if value is not None else None
+        )
 
     def like(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(Operator.LIKE, Key(key), Value(value) if value is not None else None)
+        return Expression(
+            Operator.LIKE, Key(key), Value(value) if value is not None else None
+        )
 
     def nlike(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(Operator.NLIKE, Key(key), Value(value) if value is not None else None)
+        return Expression(
+            Operator.NLIKE, Key(key), Value(value) if value is not None else None
+        )
 
-    def includes(self, key: str, values: Union[List[int], List[str], List[bool], List[float]]) -> Expression:
+    def includes(
+        self, key: str, values: Union[List[int], List[str], List[bool], List[float]]
+    ) -> Expression:
         """Check if a key's value is in a list of values (formerly in_)"""
-        return Expression(Operator.IN, Key(key), Value(values) if values is not None else None)
+        return Expression(
+            Operator.IN, Key(key), Value(values) if values is not None else None
+        )
 
-    def excludes(self, key: str, values: Union[List[int], List[str], List[bool], List[float]]) -> Expression:
+    def excludes(
+        self, key: str, values: Union[List[int], List[str], List[bool], List[float]]
+    ) -> Expression:
         """Check if a key's value is not in a list of values (formerly nin)"""
-        return Expression(Operator.NIN, Key(key), Value(values) if values is not None else None)
+        return Expression(
+            Operator.NIN, Key(key), Value(values) if values is not None else None
+        )
 
     def both(self, left: Operand, right: Operand) -> Expression:
-        """Combine two expressions with AND (formerly and_)"""
-        return Expression(Operator.AND, left, right)
+        """Combine two expressions with AND"""
+        return CombinedExpression(Operator.AND, left, right)
 
     def either(self, left: Operand, right: Operand) -> Expression:
-        """Combine two expressions with OR (formerly or_)"""
-        return Expression(Operator.OR, left, right)
+        """Combine two expressions with OR"""
+        return CombinedExpression(Operator.OR, left, right)
 
     def negate(self, content: Expression) -> Expression:
-        """Negate an expression (formerly not_)"""
+        """Negate an expression (i.e. NOT)"""
         return Expression(Operator.NOT, content)
 
     def group(self, content: Expression) -> Group:
         return Group(content)
+
 
 class FilterExpressionConverter(ABC):
     """
@@ -232,17 +284,23 @@ class FilterExpressionConverter(ABC):
         pass
 
     @abstractmethod
-    def convert_symbol_to_context(self, exp: Expression, context: StringBuilder) -> None:
+    def convert_symbol_to_context(
+        self, exp: Expression, context: StringBuilder
+    ) -> None:
         """Determine the appropriate operation symbol for a given expression"""
         pass
 
     @abstractmethod
-    def convert_operand_to_context(self, operand: Operand, context: StringBuilder) -> None:
+    def convert_operand_to_context(
+        self, operand: Operand, context: StringBuilder
+    ) -> None:
         """Convert an operand into a string representation within a given context"""
         pass
 
     @abstractmethod
-    def convert_expression_to_context(self, expression: Expression, context: StringBuilder) -> None:
+    def convert_expression_to_context(
+        self, expression: Expression, context: StringBuilder
+    ) -> None:
         """Convert an expression to its string representation in the given context"""
         pass
 
@@ -252,12 +310,16 @@ class FilterExpressionConverter(ABC):
         pass
 
     @abstractmethod
-    def convert_value_to_context(self, filter_value: Value, context: StringBuilder) -> None:
+    def convert_value_to_context(
+        self, filter_value: Value, context: StringBuilder
+    ) -> None:
         """Convert a value to its string representation in the given context"""
         pass
 
     @abstractmethod
-    def convert_single_value_to_context(self, value: ValueType, context: StringBuilder) -> None:
+    def convert_single_value_to_context(
+        self, value: ValueType, context: StringBuilder
+    ) -> None:
         """Convert a single value to its string representation in the given context"""
         pass
 
@@ -272,7 +334,9 @@ class FilterExpressionConverter(ABC):
         pass
 
     @abstractmethod
-    def write_value_range_start(self, list_value: Value, context: StringBuilder) -> None:
+    def write_value_range_start(
+        self, list_value: Value, context: StringBuilder
+    ) -> None:
         """Write the start of a value range in the given context"""
         pass
 
@@ -282,9 +346,12 @@ class FilterExpressionConverter(ABC):
         pass
 
     @abstractmethod
-    def write_value_range_separator(self, list_value: Value, context: StringBuilder) -> None:
+    def write_value_range_separator(
+        self, list_value: Value, context: StringBuilder
+    ) -> None:
         """Write the separator between values in a range in the given context"""
         pass
+
 
 class BaseFilterExpressionConverter(FilterExpressionConverter):
     """
@@ -301,7 +368,9 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
         if expression.left is None:
             raise ValueError("Expression must have a left operand")
         if expression.type not in (Operator.NOT,) and expression.right is None:
-            raise ValueError(f"Expression with operator {expression.type} must have a right operand")
+            raise ValueError(
+                f"Expression with operator {expression.type} must have a right operand"
+            )
 
     def convert_expression(self, expression: Expression) -> str:
         self._validate_expression(expression)
@@ -312,7 +381,9 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
         self.convert_operand_to_context(operand, context)
         return str(context)
 
-    def convert_symbol_to_context(self, exp: Expression, context: StringBuilder) -> None:
+    def convert_symbol_to_context(
+        self, exp: Expression, context: StringBuilder
+    ) -> None:
         symbol_map = {
             Operator.AND: " AND ",
             Operator.OR: " OR ",
@@ -332,7 +403,9 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
             raise ValueError(f"Unsupported expression type: {exp.type}")
         context.append(symbol_map[exp.type])
 
-    def convert_operand_to_context(self, operand: Operand, context: StringBuilder) -> None:
+    def convert_operand_to_context(
+        self, operand: Operand, context: StringBuilder
+    ) -> None:
         if isinstance(operand, Group):
             self._convert_group_to_context(operand, context)
         elif isinstance(operand, Key):
@@ -340,11 +413,15 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
         elif isinstance(operand, Value):
             self.convert_value_to_context(operand, context)
         elif isinstance(operand, Expression):
-            if (operand.type != Operator.NOT and
-                    operand.type != Operator.AND and
-                    operand.type != Operator.OR and
-                    not isinstance(operand.right, Value)):
-                raise ValueError("Non AND/OR expression must have Value right argument!")
+            if (
+                operand.type != Operator.NOT
+                and operand.type != Operator.AND
+                and operand.type != Operator.OR
+                and not isinstance(operand.right, Value)
+            ):
+                raise ValueError(
+                    "Non AND/OR expression must have Value right argument!"
+                )
 
             if operand.type == Operator.NOT:
                 self._convert_not_expression_to_context(operand, context)
@@ -353,7 +430,9 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
         else:
             raise ValueError(f"Unexpected operand type: {type(operand)}")
 
-    def _convert_not_expression_to_context(self, expression: Expression, context: StringBuilder) -> None:
+    def _convert_not_expression_to_context(
+        self, expression: Expression, context: StringBuilder
+    ) -> None:
         self.convert_operand_to_context(self._negate_operand(expression), context)
 
     def _negate_operand(self, operand: Operand) -> Operand:
@@ -361,29 +440,31 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
             in_ex = self._negate_operand(operand.content)
             if isinstance(in_ex, Group):
                 in_ex = in_ex.content
-            return Group(in_ex)
-
+                return Group(in_ex)
+            raise ValueError(f"Unexpected operand type: {type(operand)}")
         elif isinstance(operand, Expression):
             if operand.type == Operator.NOT:
                 return self._negate_operand(operand.left)
             elif operand.type in (Operator.AND, Operator.OR):
+                if operand.right is None:
+                    raise ValueError("Unexpected None value")
                 return Expression(
                     TYPE_NEGATION_MAP[operand.type],
                     self._negate_operand(operand.left),
-                    self._negate_operand(operand.right)
+                    self._negate_operand(operand.right),
                 )
             elif operand.type in TYPE_NEGATION_MAP:
                 return Expression(
-                    TYPE_NEGATION_MAP[operand.type],
-                    operand.left,
-                    operand.right
+                    TYPE_NEGATION_MAP[operand.type], operand.left, operand.right
                 )
             else:
                 raise ValueError(f"Unknown expression type: {operand.type}")
         else:
             raise ValueError(f"Cannot negate operand of type: {type(operand)}")
 
-    def convert_value_to_context(self, filter_value: Value, context: StringBuilder) -> None:
+    def convert_value_to_context(
+        self, filter_value: Value, context: StringBuilder
+    ) -> None:
         if isinstance(filter_value.value, (list, tuple)):
             self.write_value_range_start(filter_value, context)
             for i, value in enumerate(filter_value.value):
@@ -394,7 +475,9 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
         else:
             self.convert_single_value_to_context(filter_value.value, context)
 
-    def convert_single_value_to_context(self, value: ValueType, context: StringBuilder) -> None:
+    def convert_single_value_to_context(
+        self, value: ValueType, context: StringBuilder
+    ) -> None:
         if isinstance(value, str):
             context.append(f"'{value}'")
         else:
@@ -405,11 +488,15 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
         self.convert_operand_to_context(group.content, context)
         self.write_group_end(group, context)
 
-    def write_value_range_start(self, list_value: Value, context: StringBuilder) -> None:
+    def write_value_range_start(
+        self, list_value: Value, context: StringBuilder
+    ) -> None:
         context.append("[")
 
     def write_value_range_end(self, list_value: Value, context: StringBuilder) -> None:
         context.append("]")
 
-    def write_value_range_separator(self, list_value: Value, context: StringBuilder) -> None:
+    def write_value_range_separator(
+        self, list_value: Value, context: StringBuilder
+    ) -> None:
         context.append(",")

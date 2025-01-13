@@ -1,6 +1,7 @@
 """Get fixtures for the database connection."""
+
 import os
-from contextlib import  contextmanager
+from contextlib import contextmanager
 
 import mariadb
 
@@ -17,16 +18,14 @@ default_conf = {
     "host": os.environ.get("MARIADB_HOST", "localhost"),
     "database": os.environ.get("MARIADB_DATABASE", "langchain"),
     "port": int(os.environ.get("MARIADB_PORT", "3306")),
-    "password" : os.environ.get("MARIADB_PASSWORD", "langchain"),
+    "password": os.environ.get("MARIADB_PASSWORD", "langchain"),
 }
 
 
 @contextmanager
 def pool() -> mariadb.ConnectionPool:
     # Establish a connection to your test database
-    pool = mariadb.ConnectionPool(pool_name="mariadb_test",
-                                  pool_size=1,
-                                  **default_conf)
+    pool = mariadb.ConnectionPool(pool_name="mariadb_test", pool_size=1, **default_conf)
     try:
         yield pool
     finally:

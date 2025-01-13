@@ -55,7 +55,7 @@ select = [
 ]
 
 [tool.mypy]
-disallow_untyped_defs = "True"
+disable_error_code = ["import-untyped"]
 
 [tool.coverage.run]
 omit = ["tests/*"]

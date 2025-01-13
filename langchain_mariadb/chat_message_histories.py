@@ -20,10 +20,10 @@ logger = logging.getLogger(__name__)
 
 def _create_table_and_index(table_name: str) -> List[str]:
     """Create SQL queries for table and index creation.
-    
+
     Args:
         table_name: Name of the table to create
-        
+
     Returns:
         List of SQL statements for creating table and index
     """
@@ -137,7 +137,7 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         /,
     ) -> None:
         """Create the table schema in the database and create relevant indexes.
-        
+
         Args:
             pool: The database connection pool
             table_name: Name of the table to create
@@ -172,7 +172,7 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
 
     def add_messages(self, messages: Sequence[BaseMessage]) -> None:
         """Add messages to the chat history.
-        
+
         Args:
             messages: Sequence of messages to add
         """
@@ -190,7 +190,7 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
 
     def get_messages(self) -> List[BaseMessage]:
         """Retrieve messages from the chat history.
-        
+
         Returns:
             List of messages in chronological order
         """
@@ -202,7 +202,7 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
                 items = [json.loads(record[0]) for record in cursor.fetchall()]
         return messages_from_dict(items)
 
-    @property
+    @property  # type: ignore[override]
     def messages(self) -> List[BaseMessage]:
         """Get all messages in the chat history."""
         return self.get_messages()
