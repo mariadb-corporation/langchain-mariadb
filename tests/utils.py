@@ -7,12 +7,6 @@ import mariadb
 
 from langchain_mariadb import MariaDBStore
 
-MARIADB_USER = os.environ.get("MARIADB_USER", "langchain")
-MARIADB_HOST = os.environ.get("MARIADB_HOST", "localhost")
-MARIADB_PASSWORD = os.environ.get("MARIADB_PASSWORD", "langchain")
-MARIADB_DATABASE = os.environ.get("MARIADB_DATABASE", "langchain")
-MARIADB_PORT = os.environ.get("MARIADB_PORT", "3306")
-
 default_conf = {
     "user": os.environ.get("MARIADB_USER", "langchain"),
     "host": os.environ.get("MARIADB_HOST", "localhost"),

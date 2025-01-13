@@ -41,6 +41,11 @@ jobs:
         shell: bash
         run: poetry install
 
+      - name: Use mariadb.example.com dns in tests
+        shell: bash
+        run: export MARIADB_HOST=mariadb.example.com
+
+
       - name: Run core tests
         shell: bash
         run: make test
