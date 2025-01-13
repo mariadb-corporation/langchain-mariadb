@@ -40,12 +40,12 @@ jobs:
           - "3.9"
           - "3.10"
           - "3.11"
+          - "3.12"
+          - "3.13"
     name: Python ${{ matrix.python-version }} tests
     steps:
       - uses: getong/mariadb-action@v1.11
         with:
-          host port: 3800 # Optional, default value is 3306. The port of host
-          container port: 3307 # Optional, default value is 3306. The port of container
           character set server: 'utf8mb4'
           collation server: 'utf8mb4_general_ci'
           mariadb version: '11.7-rc'
@@ -63,7 +63,7 @@ jobs:
           cache-key: langchain-extract-all
       - name: Test database connection
         run: |
-          # Set up postgresql-client
+          # Set up mariadb-client
           sudo apt-get install -y libmariadb3 libmariadb-dev
       - name: Install dependencies
         shell: bash
