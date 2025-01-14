@@ -56,7 +56,7 @@ jobs:
           mysql root password: 'langchain'
           mysql user: 'langchain'
           mysql password: 'langchain'
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python ${{ matrix.python-version }} + Poetry ${{ env.POETRY_VERSION }}
         uses: "./.github/actions/poetry_setup"
         with:
