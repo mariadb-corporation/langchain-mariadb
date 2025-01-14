@@ -15,8 +15,7 @@ Feel free to use the abstractions as provided or modify/extend them as appropria
 pip install -U langchain-mariadb
 ```
 
-## Usage
-### Vector store
+## Vector store
 
 This is an implementation of a LangChain vectorstore using `mariadb` as the backend.
 MariaDB requires version 11.7.1 or later for vector support.
@@ -29,13 +28,15 @@ This code provides a MariaDB vectorstore implementation with the following featu
 * Uses connection pooling for better performance
 * Supports custom table and column configurations
 
-#### Installation
+### Installation
+
+You can run the following command to spin up a MariaDB container:
 
 ```shell
 docker run --name mariadb-container -e MARIADB_ROOT_PASSWORD=langchain -e MARIADB_DATABASE=langchain -p 3306:3306 -d mariadb:11.7-rc
 ```
 
-##### install c/c connector
+#### install c/c connector
 ```shell
 # on ubuntu
 sudo apt install libmariadb3 libmariadb-dev
@@ -44,7 +45,7 @@ sudo yum install MariaDB-shared MariaDB-devel
 # python  
 pip install --quiet -U langchain_openai mariadb langchain_mariadb
 ```
-##### Initialize the vectorstore
+#### Initialize the vectorstore
 ```python
 from langchain_openai import OpenAIEmbeddings
 from langchain_mariadb import MariaDBStore
@@ -55,7 +56,7 @@ import mariadb
 pool = mariadb.ConnectionPool(
     pool_name="mypool",
     pool_size=3,
-    host="localhost",
+    host="127.0.0.1",
     port=3306,
     user="langchain",
     password="langchain",
@@ -71,7 +72,7 @@ vectorstore = MariaDBStore(
 )
 ```
 
-##### Add new data
+#### Add new data
 
 ```python
 # adding documents
@@ -105,7 +106,7 @@ metadatas = [
 vectorstore.add_texts(texts=texts, metadatas=metadatas)
 ```
 
-##### Searching similarity
+#### Searching similarity
 
 ```python
 # Search similar texts
@@ -118,7 +119,7 @@ filter={"category": "greeting"}
 )
 ```
 
-##### Filtering Support
+#### Filtering Support
 
 The vectorstore supports a set of filters that can be applied against the metadata fields of the documents.
 
@@ -151,7 +152,7 @@ results = vectorstore.similarity_search('ducks', k=10, filter={
 })
 ```
 
-### ChatMessageHistory
+## ChatMessageHistory
 
 The chat message history abstraction helps to persist chat message history in a MariaDB table.
 
@@ -174,7 +175,7 @@ import mariadb
 pool = mariadb.ConnectionPool(
     pool_name="chat_pool",
     user="root",
-    host="localhost",
+    host="127.0.0.1",
     database="chatdb"
 )
 
