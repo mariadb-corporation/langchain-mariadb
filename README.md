@@ -20,9 +20,6 @@ pip install -U langchain-mariadb
 
 This is an implementation of a LangChain vectorstore using `mariadb` as the backend.
 MariaDB requires version 11.7.1 or later for vector support.
-You can run the following command to spin up a MariaDB container:
-
-### Status
 
 This code provides a MariaDB vectorstore implementation with the following features:
 
