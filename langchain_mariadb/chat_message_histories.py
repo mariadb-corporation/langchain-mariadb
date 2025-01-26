@@ -6,11 +6,12 @@ import json
 import logging
 import re
 import uuid
-from typing import List, Optional, Sequence
+from typing import List, Optional, Sequence, Union, Any
 
 import mariadb
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, message_to_dict, messages_from_dict
+from sqlalchemy import Engine, create_engine
 
 from langchain_mariadb._utils import enquote_identifier
 
@@ -45,6 +46,23 @@ def _create_table_and_index(table_name: str) -> List[str]:
     return statements
 
 
+def _set_datasource(
+    datasource: Union[mariadb.ConnectionPool | Engine | str],
+    engine_args: Optional[dict[str, Any]] = None,
+) -> mariadb.ConnectionPool | Engine:
+    if isinstance(datasource, str):
+        return create_engine(url=datasource, **(engine_args or {}))
+    elif isinstance(datasource, Engine):
+        return datasource
+    elif isinstance(datasource, mariadb.ConnectionPool):
+        return datasource
+    else:
+        raise ValueError(
+            "datasource should be a connection string, an instance of "
+            "sqlalchemy.engine.Engine or a mariadb pool"
+        )
+
+
 class MariaDBChatMessageHistory(BaseChatMessageHistory):
     """Chat message history that persists to a MariaDB database."""
 
@@ -54,7 +72,8 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         session_id: str,
         /,
         *,
-        pool: mariadb.ConnectionPool,
+        datasource: Union[mariadb.ConnectionPool | Engine | str],
+        engine_args: Optional[dict[str, Any]] = None,
     ) -> None:
         """Initialize a chat message history that persists to a MariaDB database.
 
@@ -67,7 +86,7 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         Args:
             table_name: Name of the database table to use (must be alphanumeric + underscores)
             session_id: UUID string to identify the chat session
-            pool: MariaDB connection pool for database access
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
 
         Example:
             ```python
@@ -90,7 +109,7 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
             history = MariaDBChatMessageHistory(
                 "chat_messages",
                 str(uuid.uuid4()),
-                pool=pool
+                datasource=pool
             )
 
             # Add messages
@@ -107,10 +126,7 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
             ValueError: If pool is not provided, session_id is not a valid UUID,
                        or table_name contains invalid characters
         """
-        if not pool:
-            raise ValueError("Pool must be provided")
-
-        self._pool = pool
+        self._datasource = _set_datasource(datasource, engine_args)
 
         # Validate that session id is a UUID
         try:
@@ -130,45 +146,67 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         self._table_name = table_name
         self._escaped_table = enquote_identifier(table_name)
 
+    def get_connection(self):
+        if isinstance(self._datasource, mariadb.ConnectionPool):
+            return self._datasource.get_connection()
+        else:
+            return self._datasource.raw_connection()
+
     @staticmethod
     def create_tables(
-        pool: mariadb.ConnectionPool,
+        datasource: Union[mariadb.ConnectionPool | Engine | str],
         table_name: str,
         /,
     ) -> None:
         """Create the table schema in the database and create relevant indexes.
 
         Args:
-            pool: The database connection pool
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
             table_name: Name of the table to create
         """
         queries = _create_table_and_index(table_name)
         logger.info("Creating schema for table %s", table_name)
-        with pool.get_connection() as con:
+        ds = _set_datasource(datasource)
+        if isinstance(ds, mariadb.ConnectionPool):
+            con = ds.get_connection()
+        else:
+            con = ds.raw_connection()
+        try:
             with con.cursor() as cursor:
                 for query in queries:
                     cursor.execute(query)
                 cursor.close()
             con.commit()
+        finally:
+            con.close()
 
     @staticmethod
-    def drop_table(pool: mariadb.ConnectionPool, table_name: str, /) -> None:
+    def drop_table(
+        datasource: Union[mariadb.ConnectionPool | Engine | str], table_name: str, /
+    ) -> None:
         """Delete the table schema from the database.
 
         WARNING: This will delete the table and all its data permanently.
 
         Args:
-            pool: The database connection pool
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
             table_name: Name of the table to drop
         """
         escaped_table = enquote_identifier(table_name)
         query = f"DROP TABLE IF EXISTS {escaped_table}"
 
         logger.info("Dropping table %s", table_name)
-        with pool.get_connection() as con:
+        ds = _set_datasource(datasource)
+        if isinstance(ds, mariadb.ConnectionPool):
+            con = ds.get_connection()
+        else:
+            con = ds.raw_connection()
+        try:
             with con.cursor() as cursor:
                 cursor.execute(query)
             con.commit()
+        finally:
+            con.close()
 
     def add_messages(self, messages: Sequence[BaseMessage]) -> None:
         """Add messages to the chat history.
@@ -183,10 +221,13 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
 
         query = f"INSERT INTO {self._escaped_table} (session_id, message) VALUES (?, ?)"
 
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 cursor.executemany(query, values)
             con.commit()
+        finally:
+            con.close()
 
     def get_messages(self) -> List[BaseMessage]:
         """Retrieve messages from the chat history.
@@ -196,10 +237,13 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         """
         query = f"SELECT message FROM {self._escaped_table} WHERE session_id = ? ORDER BY id"
 
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 cursor.execute(query, (self._session_id,))
                 items = [json.loads(record[0]) for record in cursor.fetchall()]
+        finally:
+            con.close()
         return messages_from_dict(items)
 
     @property  # type: ignore[override]
@@ -211,7 +255,10 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         """Clear all messages for the current session."""
         query = f"DELETE FROM {self._escaped_table} WHERE session_id = ?"
 
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 cursor.execute(query, (self._session_id,))
             con.commit()
+        finally:
+            con.close()

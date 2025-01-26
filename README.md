@@ -67,7 +67,7 @@ pool = mariadb.ConnectionPool(
 vectorstore = MariaDBStore(
     embeddings=OpenAIEmbeddings(),
     embedding_length=1536,
-    pool=pool,
+    datasource=pool,
     collection_name="my_docs"
 )
 ```
@@ -187,7 +187,7 @@ MariaDBChatMessageHistory.create_tables(pool, table_name)
 chat_history = MariaDBChatMessageHistory(
     table_name,
     str(uuid.uuid4()), # session_id
-    pool=pool
+    datasource=pool
 )
 
 # Add messages to the chat history

@@ -29,6 +29,8 @@ from langchain_core.embeddings import Embeddings
 from langchain_core.runnables.config import run_in_executor
 from langchain_core.vectorstores import VectorStore
 from langchain_core.vectorstores.utils import maximal_marginal_relevance
+from sqlalchemy import create_engine
+from sqlalchemy.engine import Engine
 
 # Local
 from langchain_mariadb._utils import enquote_identifier
@@ -69,7 +71,7 @@ Example:
     store = MariaDBStore.from_texts(
         texts=["Hello, world!", "Another text"],
         embedding=embeddings,
-        pool=pool,
+        datasource=pool,
         collection_name="my_collection"  # Optional, defaults to "langchain"
     )
 
@@ -129,7 +131,7 @@ Example:
         store = MariaDBStore.from_texts(
             texts=["Hello, world!", "Another text"],
             embedding=embeddings,
-            pool=pool
+            datasource=pool
         )
 
         # Perform async similarity search
@@ -176,7 +178,7 @@ Advanced Usage:
     store = MariaDBStore.from_texts(
         texts=["Hello, world!"],
         embedding=embeddings,
-        pool=pool,
+        datasource=pool,
         config=config
     )
     ```
@@ -194,7 +196,7 @@ Advanced Usage:
     store = MariaDBStore.from_documents(
         documents=documents,
         embedding=embeddings,
-        pool=pool
+        datasource=pool
     )
 
     # Add more documents
@@ -418,12 +420,13 @@ class MariaDBStore(VectorStore):
         embeddings: Embeddings,
         embedding_length: Optional[int] = 1536,
         *,
-        pool: mariadb.ConnectionPool,
+        datasource: Union[mariadb.ConnectionPool | Engine | str],
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         collection_metadata: Optional[dict] = None,
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
         config: StoreConfig = StoreConfig(),
         logger: Optional[logging.Logger] = None,
+        engine_args: Optional[dict[str, Any]] = None,
         relevance_score_fn: Optional[Callable[[float], float]] = None,
     ) -> None:
         """Initialize the MariaDB vector store.
@@ -431,7 +434,7 @@ class MariaDBStore(VectorStore):
         Args:
             embeddings: Embeddings object for creating embeddings
             embedding_length: Length of embedding vectors (default: 1536)
-            pool: MariaDB connection pool for database operations
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
             collection_name: Name of the collection to store vectors (default: langchain)
             collection_metadata: Optional metadata for the collection
             distance_strategy: Strategy for computing vector distances (COSINE or EUCLIDEAN)
@@ -447,9 +450,19 @@ class MariaDBStore(VectorStore):
         self._distance_strategy = distance_strategy
         self.pre_delete_collection = config.pre_delete_collection
         self.logger = logger or logging.getLogger(__name__)
-        self._pool = pool
-        self.override_relevance_score_fn = relevance_score_fn
 
+        self.override_relevance_score_fn = relevance_score_fn
+        if isinstance(datasource, str):
+            self._datasource = create_engine(url=datasource, **(engine_args or {}))
+        elif isinstance(datasource, Engine):
+            self._datasource = datasource
+        elif isinstance(datasource, mariadb.ConnectionPool):
+            self._datasource = datasource
+        else:
+            raise ValueError(
+                "datasource should be a connection string, an instance of "
+                "sqlalchemy.engine.Engine or a mariadb pool"
+            )
         # Initialize table and column names
         self._embedding_table_name = enquote_identifier(config.tables.embedding_table)
         self._embedding_id_col_name = enquote_identifier(config.columns.embedding_id)
@@ -578,28 +591,41 @@ class MariaDBStore(VectorStore):
         )
 
         # Execute all queries
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 cursor.execute(table_query)
                 cursor.execute(col_table_query)
                 cursor.execute(alter_query)
                 cursor.execute(create_collection_id_idx)
             con.commit()
+        finally:
+            con.close()
+
+    def get_connection(self):
+        if isinstance(self._datasource, mariadb.ConnectionPool):
+            return self._datasource.get_connection()
+        else:
+            return self._datasource.raw_connection()
 
     def drop_tables(self) -> None:
         """Drop all tables used by the vector store."""
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 cursor.execute(f"DROP TABLE IF EXISTS {self._embedding_table_name}")
                 cursor.execute(f"DROP TABLE IF EXISTS {self._collection_table_name}")
             con.commit()
+        finally:
+            con.close()
 
     def create_collection(self) -> None:
         """Create a new collection or retrieve existing one."""
         if self.pre_delete_collection:
             self.delete_collection()
 
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 # Check if collection exists
                 cursor.execute(
@@ -625,10 +651,13 @@ class MariaDBStore(VectorStore):
                 row = cursor.fetchone()
                 self._collection_id = row[0]
             con.commit()
+        finally:
+            con.close()
 
     def delete_collection(self) -> None:
         """Delete the current collection and its associated data."""
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 try:
                     # Find collection ID
@@ -654,6 +683,8 @@ class MariaDBStore(VectorStore):
                 except Exception as e:
                     self.logger.debug("Failed to delete previous collection")
             con.commit()
+        finally:
+            con.close()
 
     def delete(
         self,
@@ -668,8 +699,8 @@ class MariaDBStore(VectorStore):
         """
         if not ids:
             return
-
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 self.logger.debug("Deleting vectors by IDs")
                 data = [(i,) for i in ids]
@@ -679,6 +710,8 @@ class MariaDBStore(VectorStore):
                     data,
                 )
                 con.commit()
+        finally:
+            con.close()
 
     def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
         """Get documents by their IDs."""
@@ -703,7 +736,8 @@ class MariaDBStore(VectorStore):
         )
 
         documents = []
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 cursor.execute(query)
                 rows = cursor.fetchall()
@@ -715,6 +749,8 @@ class MariaDBStore(VectorStore):
                             metadata=json.loads(row[2]),
                         )
                     )
+        finally:
+            con.close()
         return documents
 
     def add_embeddings(
@@ -761,7 +797,8 @@ class MariaDBStore(VectorStore):
             metadatas = [{} for _ in texts]
 
         # Insert embeddings into database
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 data = []
                 for text, metadata, embedding, id_ in zip(
@@ -793,7 +830,8 @@ class MariaDBStore(VectorStore):
                 )
                 cursor.executemany(query, data)
                 con.commit()
-
+        finally:
+            con.close()
         return ids_
 
     def add_texts(
@@ -1364,11 +1402,14 @@ class MariaDBStore(VectorStore):
         Returns:
             Sequence of query results
         """
-        with self._pool.get_connection() as con:
+        con = self.get_connection()
+        try:
             with con.cursor() as cursor:
                 binary_emb = self._embedding_to_binary(embedding)
                 cursor.execute(query_, (binary_emb, self._collection_id, k))
                 return cursor.fetchall()
+        finally:
+            con.close()
 
     # Filter methods
     def _handle_field_filter(
@@ -1639,7 +1680,7 @@ class MariaDBStore(VectorStore):
         ids: Optional[List[str]] = None,
         *,
         metadatas: Optional[List[dict]] = None,
-        pool: mariadb.ConnectionPool,
+        datasource: Union[mariadb.ConnectionPool | Engine | str],
         embedding: Embeddings,
         embedding_length: Optional[int] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
@@ -1656,7 +1697,7 @@ class MariaDBStore(VectorStore):
             embeddings: List of embedding vectors
             ids: Optional list of IDs for the documents
             metadatas: Optional list of metadata dicts
-            pool: MariaDB connection pool
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
             embedding: Embeddings object for creating embeddings
             embedding_length: Optional length of embedding vectors
             collection_name: Name of collection (default: langchain)
@@ -1686,7 +1727,7 @@ class MariaDBStore(VectorStore):
         store = cls(
             embedding,
             emb_len,
-            pool=pool,
+            datasource=datasource,
             collection_name=collection_name,
             distance_strategy=distance_strategy,
             logger=logger,
@@ -1717,7 +1758,7 @@ class MariaDBStore(VectorStore):
             embedding: Embeddings object for creating embeddings
             metadatas: Optional list of metadata dicts for each text
             ids: Optional list of unique IDs for each text
-            pool: MariaDB connection pool for database operations
+            datasource: datasource (connection stringMariaDB connection pool for database operations
             collection_name: Name of the collection to store vectors (default: langchain)
             distance_strategy: Strategy for computing vector distances (COSINE or EUCLIDEAN)
             embedding_length: Length of embedding vectors (default: 1536)
@@ -1801,7 +1842,7 @@ class MariaDBStore(VectorStore):
         *,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
-        pool: mariadb.ConnectionPool,
+        datasource: Union[mariadb.ConnectionPool | Engine | str],
         config: StoreConfig = StoreConfig(),
         **kwargs: Any,
     ) -> MariaDBStore:
@@ -1813,7 +1854,7 @@ class MariaDBStore(VectorStore):
             embedding: Embeddings object for creating embeddings
             collection_name: Name of collection (default: langchain)
             distance_strategy: Strategy for computing distances
-            pool: MariaDB connection pool
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
             **kwargs: Additional arguments passed to constructor
 
         Returns:
@@ -1821,7 +1862,7 @@ class MariaDBStore(VectorStore):
         """
         store = cls(
             embedding,
-            pool=pool,
+            datasource=datasource,
             collection_name=collection_name,
             distance_strategy=distance_strategy,
             config=config,
@@ -1841,7 +1882,7 @@ class MariaDBStore(VectorStore):
         Args:
             documents: List of Document objects to store
             embedding: Embeddings object for creating embeddings
-            pool: MariaDB connection pool
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
             collection_name: Name of collection (default: langchain)
             distance_strategy: Strategy for computing distances
             ids: Optional list of IDs for the documents

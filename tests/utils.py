@@ -7,13 +7,25 @@ import mariadb
 
 from langchain_mariadb import MariaDBStore
 
+USER = os.environ.get("MARIADB_USER", "langchain")
+PASSWORD = os.environ.get("MARIADB_PASSWORD", "langchain")
+HOST = os.environ.get("MARIADB_HOST", "localhost")
+PORT = int(os.environ.get("MARIADB_PORT", "3306"))
+DB = os.environ.get("MARIADB_DATABASE", "langchain")
+
 default_conf = {
-    "user": os.environ.get("MARIADB_USER", "langchain"),
-    "host": os.environ.get("MARIADB_HOST", "localhost"),
-    "database": os.environ.get("MARIADB_DATABASE", "langchain"),
-    "port": int(os.environ.get("MARIADB_PORT", "3306")),
-    "password": os.environ.get("MARIADB_PASSWORD", "langchain"),
+    "user": USER,
+    "host": HOST,
+    "database": DB,
+    "port": PORT,
+    "password": PASSWORD,
 }
+
+URL = f"mariadb+mariadbconnector://{USER}:{PASSWORD}@{HOST}:{PORT}/{DB}"
+
+
+def url() -> str:
+    return URL
 
 
 @contextmanager
