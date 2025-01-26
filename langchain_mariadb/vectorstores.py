@@ -1758,7 +1758,7 @@ class MariaDBStore(VectorStore):
             embedding: Embeddings object for creating embeddings
             metadatas: Optional list of metadata dicts for each text
             ids: Optional list of unique IDs for each text
-            datasource: datasource (connection stringMariaDB connection pool for database operations
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
             collection_name: Name of the collection to store vectors (default: langchain)
             distance_strategy: Strategy for computing vector distances (COSINE or EUCLIDEAN)
             embedding_length: Length of embedding vectors (default: 1536)
