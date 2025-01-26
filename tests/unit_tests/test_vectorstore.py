@@ -84,6 +84,7 @@ def test_mariadbstore_with_url() -> None:
         embedding=FakeEmbeddingsWithAdaDimension(),
         embedding_length=ADA_TOKEN_COUNT,
         datasource=url_value,
+        engine_args={"pool_size": 2},
         config=StoreConfig(pre_delete_collection=True),
     )
     output = docsearch.similarity_search("foo", k=1)
