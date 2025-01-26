@@ -15,7 +15,7 @@ on:
         default: '.'
 
 env:
-  POETRY_VERSION: "1.7.1"
+  POETRY_VERSION: "2.0.0"
 
 jobs:
   if_release:
