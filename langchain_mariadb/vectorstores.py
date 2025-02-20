@@ -34,8 +34,14 @@ from sqlalchemy.engine import Engine
 
 # Local
 from langchain_mariadb._utils import enquote_identifier
-from langchain_mariadb.expression_filter import BaseFilterExpressionConverter, Expression, StringBuilder, Key, Value, \
-    Group
+from langchain_mariadb.expression_filter import (
+    BaseFilterExpressionConverter,
+    Expression,
+    StringBuilder,
+    Key,
+    Value,
+    Group,
+)
 
 """
 MariaDBStore is a vector store implementation that uses MariaDB database.
@@ -86,19 +92,6 @@ Example:
                 {"language": {"$in": ["en", "es"]}}
             ]
         }
-    )
-
-    # Search with expression filter
-    from langchain_mariadb.expression_filter import FilterExpressionBuilder
-
-    f = FilterExpressionBuilder()
-
-    results = store.similarity_search(
-        "Hello",
-        filter=f.both(
-            f.eq("category", "greeting"),
-            f.includes("language", ["en", "es"])
-        )
     )
     ```
 
@@ -209,6 +202,7 @@ Distance Strategies:
 # Constants
 # ------------------------------------------------------------------------------
 _LANGCHAIN_DEFAULT_COLLECTION_NAME = "langchain"
+
 
 # ------------------------------------------------------------------------------
 # Helper Classes
@@ -882,7 +876,7 @@ class MariaDBStore(VectorStore):
         self,
         embedding: List[float],
         k: int = 4,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to embedding vector along with scores.
 
@@ -965,7 +959,7 @@ class MariaDBStore(VectorStore):
         self,
         embedding: List[float],
         k: int = 4,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs most similar to embedding vector.
@@ -991,7 +985,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using maximal marginal relevance.
@@ -1024,7 +1018,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using maximal marginal relevance asynchronously.
@@ -1058,7 +1052,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using maximal marginal relevance with scores.
@@ -1091,7 +1085,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using maximal marginal relevance with scores asynchronously.
@@ -1125,7 +1119,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using maximal marginal relevance.
@@ -1158,7 +1152,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Return docs selected using maximal marginal relevance asynchronously.
@@ -1192,7 +1186,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using maximal marginal relevance with scores.
@@ -1238,7 +1232,7 @@ class MariaDBStore(VectorStore):
         k: int = 4,
         fetch_k: int = 20,
         lambda_mult: float = 0.5,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
         """Return docs selected using maximal marginal relevance with scores asynchronously.
@@ -1308,7 +1302,7 @@ class MariaDBStore(VectorStore):
         self,
         embedding: List[float],
         k: int = 4,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         need_embeddings: bool = False,
     ) -> Sequence[Any]:
         """Query the collection for similar documents."""
@@ -1330,7 +1324,7 @@ class MariaDBStore(VectorStore):
         self,
         embedding: List[float],
         k: int = 4,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
     ) -> Sequence[Any]:
         """Query the collection and return results with similarity scores."""
         # Calculate similarity score based on distance strategy
@@ -1382,11 +1376,7 @@ class MariaDBStore(VectorStore):
     def _create_filter_sql(self, filters: Union[None, dict] = None) -> str:
         if filters is None:
             return ""
-        exp = self._create_filter_clause(filters)
-        if exp is None:
-            return ""
-        return self._expression_converter.convert_expression(exp)
-
+        return self._expression_converter.convert_expression(filters)
 
     # Result processing methods
     def _results_to_docs_and_scores(self, results: Any) -> List[Tuple[Document, float]]:
@@ -1642,4 +1632,3 @@ class MariaDBStore(VectorStore):
             metadatas=metadatas,
             **kwargs,
         )
-

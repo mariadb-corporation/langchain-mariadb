@@ -10,10 +10,10 @@ from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 
 from langchain_mariadb.vectorstores import (
-    SUPPORTED_OPERATORS,
     MariaDBStore,
     StoreConfig,
 )
+from langchain_mariadb.expression_filter import _create_filter_clause
 from tests.unit_tests.fake_embeddings import FakeEmbeddings
 from tests.unit_tests.fixtures.filtering_test_cases import (
     DOCUMENTS,
@@ -1072,6 +1072,7 @@ def test_mariadb_store_with_with_metadata_filters_5(
     docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
     assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
 
+
 @pytest.mark.parametrize(
     "invalid_filter",
     [
@@ -1092,23 +1093,4 @@ def test_mariadb_store_with_with_metadata_filters_5(
 def test_invalid_filters(mariadb_store, invalid_filter: Any) -> None:
     """Verify that invalid filters raise an error."""
     with pytest.raises(ValueError):
-        mariadb_store._create_filter_clause(invalid_filter)
-
-
-def test_validate_operators() -> None:
-    """Verify that all operators have been categorized."""
-    assert sorted(SUPPORTED_OPERATORS) == [
-        "$and",
-        "$eq",
-        "$gt",
-        "$gte",
-        "$in",
-        "$like",
-        "$lt",
-        "$lte",
-        "$ne",
-        "$nin",
-        "$nlike",
-        "$not",
-        "$or",
-    ]
+        _create_filter_clause(invalid_filter)

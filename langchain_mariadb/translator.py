@@ -42,7 +42,7 @@ class MariaDBTranslator(Visitor):
         }
 
     def visit_structured_query(
-            self, structured_query: StructuredQuery
+        self, structured_query: StructuredQuery
     ) -> Tuple[str, dict]:
         if structured_query.filter is None:
             kwargs = {}

@@ -130,76 +130,90 @@ class StringBuilder:
         return self._length
 
 
-
-
 def eq(key: str, value: ValueType) -> Expression:
     return Expression(
         Operator.EQ, Key(key), Value(value) if value is not None else None
     )
+
 
 def ne(key: str, value: ValueType) -> Expression:
     return Expression(
         Operator.NE, Key(key), Value(value) if value is not None else None
     )
 
+
 def gt(key: str, value: Union[int, str, float]) -> Expression:
     return Expression(
         Operator.GT, Key(key), Value(value) if value is not None else None
     )
+
 
 def gte(key: str, value: Union[int, str, float]) -> Expression:
     return Expression(
         Operator.GTE, Key(key), Value(value) if value is not None else None
     )
 
+
 def lt(key: str, value: Union[int, str, float]) -> Expression:
     return Expression(
         Operator.LT, Key(key), Value(value) if value is not None else None
     )
+
 
 def lte(key: str, value: Union[int, str, float]) -> Expression:
     return Expression(
         Operator.LTE, Key(key), Value(value) if value is not None else None
     )
 
+
 def like(key: str, value: Union[int, str, float]) -> Expression:
     return Expression(
         Operator.LIKE, Key(key), Value(value) if value is not None else None
     )
+
 
 def nlike(key: str, value: Union[int, str, float]) -> Expression:
     return Expression(
         Operator.NLIKE, Key(key), Value(value) if value is not None else None
     )
 
-def includes(key: str, values: Union[List[int], List[str], List[bool], List[float]]
+
+def includes(
+    key: str, values: Union[List[int], List[str], List[bool], List[float]]
 ) -> Expression:
     """Check if a key's value is in a list of values (formerly in_)"""
     return Expression(
         Operator.IN, Key(key), Value(values) if values is not None else None
     )
 
-def excludes(key: str, values: Union[List[int], List[str], List[bool], List[float]]
+
+def excludes(
+    key: str, values: Union[List[int], List[str], List[bool], List[float]]
 ) -> Expression:
     """Check if a key's value is not in a list of values (formerly nin)"""
     return Expression(
         Operator.NIN, Key(key), Value(values) if values is not None else None
     )
 
+
 def both(left: Operand, right: Operand) -> Expression:
     """Combine two expressions with AND"""
     return Expression(Operator.AND, left, right)
+
 
 def either(left: Operand, right: Operand) -> Expression:
     """Combine two expressions with OR"""
     return Expression(Operator.OR, left, right)
 
+
 def negate(content: Expression) -> Expression:
     """Negate an expression (i.e. NOT)"""
     return Expression(Operator.NOT, content)
 
+
 def group(content: Expression) -> Group:
     return Group(content)
+
 
 # Operator mappings
 STANDARD_SIMPLE_OPERATOR = {
@@ -221,14 +235,13 @@ STANDARD_STRING_ONLY_OPERATOR = {
     "$nlike": nlike,
 }
 
-GROUP_OPERATORS = {
-    "$and": both,
-    "$or": either,
-    "$not": negate
-}
+GROUP_OPERATORS = {"$and": both, "$or": either, "$not": negate}
 
 SUPPORTED_OPERATORS = (
-    set(STANDARD_SIMPLE_OPERATOR).union(STANDARD_LIST_OPERATOR).union(GROUP_OPERATORS).union(STANDARD_STRING_ONLY_OPERATOR)
+    set(STANDARD_SIMPLE_OPERATOR)
+    .union(STANDARD_LIST_OPERATOR)
+    .union(GROUP_OPERATORS)
+    .union(STANDARD_STRING_ONLY_OPERATOR)
 )
 
 
@@ -286,13 +299,21 @@ def _create_filter_clause(filters: Union[None, dict] = None) -> Expression | Non
                         else:
                             if key.lower() == "$and":
                                 exp = both(
-                                    _ensureValue(_create_filter_clause(value[_len - 1])),
-                                    _ensureValue(_create_filter_clause(value[_len - 2])),
+                                    _ensureValue(
+                                        _create_filter_clause(value[_len - 1])
+                                    ),
+                                    _ensureValue(
+                                        _create_filter_clause(value[_len - 2])
+                                    ),
                                 )
                             else:
                                 exp = either(
-                                    _ensureValue(_create_filter_clause(value[_len - 1])),
-                                    _ensureValue(_create_filter_clause(value[_len - 2])),
+                                    _ensureValue(
+                                        _create_filter_clause(value[_len - 1])
+                                    ),
+                                    _ensureValue(
+                                        _create_filter_clause(value[_len - 2])
+                                    ),
                                 )
                     _len = _len - 1
                 if key.lower() == "$and":
@@ -308,7 +329,7 @@ def _create_filter_clause(filters: Union[None, dict] = None) -> Expression | Non
                     return negate(_ensureValue(_create_filter_clause(value)))
                 if isinstance(value, list) and len(value) == 1:
                     value = value[0]
-                    if isinstance(value, (Expression, dict)):
+                    if isinstance(value, dict):
                         return negate(_ensureValue(_create_filter_clause(value)))
 
                 raise ValueError(
@@ -323,9 +344,7 @@ def _create_filter_clause(filters: Union[None, dict] = None) -> Expression | Non
                     raise ValueError(
                         f"Invalid filter condition. Expected a field but got: {key}"
                     )
-            expressions = [
-                _handle_field_filter(k, v) for k, v in filters.items()
-            ]
+            expressions = [_handle_field_filter(k, v) for k, v in filters.items()]
             if len(expressions) > 1:
                 return both(expressions[0], expressions[1])
             elif expressions:
@@ -339,87 +358,91 @@ def _create_filter_clause(filters: Union[None, dict] = None) -> Expression | Non
             f"Invalid filter type: Expected dict or Expression but got {type(filters)}"
         )
 
+
 def _ensureValue(val: Expression | None) -> Expression:
     if val is None:
         raise ValueError("Invalid filter value: Expected Expression, but got None")
     return val
 
     # Filter methods
-def _handle_field_filter(field: str, value: Any,) -> Expression:
-        """Create a filter for a specific field.
 
-        Args:
-            field: Name of field to filter on
-            value: Value to filter by. Can be:
-                - Direct value for equality filter
-                - Dict with operator and value for other filters
 
-        Returns:
-            Filter expression
+def _handle_field_filter(
+    field: str,
+    value: Any,
+) -> Expression:
+    """Create a filter for a specific field.
 
-        Raises:
-            ValueError: If field name or filter specification is invalid
-        """
-        if not isinstance(field, str):
+    Args:
+        field: Name of field to filter on
+        value: Value to filter by. Can be:
+            - Direct value for equality filter
+            - Dict with operator and value for other filters
+
+    Returns:
+        Filter expression
+
+    Raises:
+        ValueError: If field name or filter specification is invalid
+    """
+    if not isinstance(field, str):
+        raise ValueError(
+            f"Field should be a string but got: {type(field)} with value: {field}"
+        )
+
+    if field.startswith("$"):
+        raise ValueError(
+            f"Invalid filter condition. Expected a field but got an operator: {field}"
+        )
+
+    # Allow [a-zA-Z0-9_] only
+    if not field.isidentifier():
+        raise ValueError(f"Invalid field name: {field}. Expected a valid identifier.")
+
+    if isinstance(value, dict):
+        if len(value) != 1:
             raise ValueError(
-                f"Field should be a string but got: {type(field)} with value: {field}"
+                "Invalid filter condition. Expected a dictionary with a single key "
+                f"that corresponds to an operator but got {len(value)} keys. "
+                f"The first few keys are: {list(value.keys())[:3]}"
             )
+        operator, filter_value = list(value.items())[0]
 
-        if field.startswith("$"):
+        # Verify operator is valid
+        if operator not in SUPPORTED_OPERATORS:
             raise ValueError(
-                f"Invalid filter condition. Expected a field but got an operator: {field}"
+                f"Invalid operator: {operator}. Expected one of {SUPPORTED_OPERATORS}"
             )
+    else:
+        # Default to equality filter
+        operator = "$eq"
+        filter_value = value
 
-        # Allow [a-zA-Z0-9_] only
-        if not field.isidentifier():
-            raise ValueError(
-                f"Invalid field name: {field}. Expected a valid identifier."
-            )
-
-        if isinstance(value, dict):
-            if len(value) != 1:
-                raise ValueError(
-                    "Invalid filter condition. Expected a dictionary with a single key "
-                    f"that corresponds to an operator but got {len(value)} keys. "
-                    f"The first few keys are: {list(value.keys())[:3]}"
+    if operator in STANDARD_SIMPLE_OPERATOR:
+        return STANDARD_SIMPLE_OPERATOR[operator](field, filter_value)
+    elif operator in STANDARD_STRING_ONLY_OPERATOR:
+        for val in filter_value:
+            if not isinstance(val, str):
+                raise NotImplementedError(
+                    f"Unsupported type: {type(val)} for value: {val}"
                 )
-            operator, filter_value = list(value.items())[0]
-
-            # Verify operator is valid
-            if operator not in SUPPORTED_OPERATORS:
-                raise ValueError(
-                    f"Invalid operator: {operator}. Expected one of {SUPPORTED_OPERATORS}"
+        return STANDARD_STRING_ONLY_OPERATOR[operator](field, filter_value)
+    elif operator in STANDARD_LIST_OPERATOR:
+        for val in filter_value:
+            if not isinstance(val, (str, int, float)):
+                raise NotImplementedError(
+                    f"Unsupported type: {type(val)} for value: {val}"
                 )
+            if isinstance(val, bool):
+                raise NotImplementedError(
+                    f"Unsupported type: {type(val)} for value: {val}"
+                )
+        if operator == "$in":
+            return includes(field, filter_value)
         else:
-            # Default to equality filter
-            operator = "$eq"
-            filter_value = value
-
-        if operator in STANDARD_SIMPLE_OPERATOR:
-            return STANDARD_SIMPLE_OPERATOR[operator](field, filter_value)
-        elif operator in STANDARD_STRING_ONLY_OPERATOR:
-            for val in filter_value:
-                if not isinstance(val, str):
-                    raise NotImplementedError(
-                        f"Unsupported type: {type(val)} for value: {val}"
-                    )
-            return STANDARD_STRING_ONLY_OPERATOR[operator](field, filter_value)
-        elif operator in STANDARD_LIST_OPERATOR:
-            for val in filter_value:
-                if not isinstance(val, (str, int, float)):
-                    raise NotImplementedError(
-                        f"Unsupported type: {type(val)} for value: {val}"
-                    )
-                if isinstance(val, bool):
-                    raise NotImplementedError(
-                        f"Unsupported type: {type(val)} for value: {val}"
-                    )
-            if operator == "$in":
-                return includes(field, filter_value)
-            else:
-                return excludes(field, filter_value)
-        else:
-            raise NotImplementedError(f"Operator {operator} not implemented")
+            return excludes(field, filter_value)
+    else:
+        raise NotImplementedError(f"Operator {operator} not implemented")
 
 
 class FilterExpressionConverter(ABC):
@@ -429,7 +452,7 @@ class FilterExpressionConverter(ABC):
     """
 
     @abstractmethod
-    def convert_expression(self, expression: Expression) -> str:
+    def convert_expression(self, filters: dict) -> str:
         """Convert a complete expression into its string representation"""
         pass
 
@@ -522,9 +545,12 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
                 f"Expression with operator {expression.type} must have a right operand"
             )
 
-    def convert_expression(self, expression: Expression) -> str:
-        self._validate_expression(expression)
-        return self._convert_operand(expression)
+    def convert_expression(self, filters: dict) -> str:
+        exp = _create_filter_clause(filters)
+        if exp is None:
+            return ""
+        self._validate_expression(exp)
+        return self._convert_operand(exp)
 
     def _convert_operand(self, operand: Operand) -> str:
         context = StringBuilder()

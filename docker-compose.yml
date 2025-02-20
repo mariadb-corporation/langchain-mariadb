@@ -3,7 +3,7 @@ version: "3"
 
 services:
   postgres:
-    image: mariadb:11.7-rc
+    image: mariadb:11.7
     environment:
       MARIADB_USER: langchain
       MARIADB_PASSWORD: langchain

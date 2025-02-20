@@ -4,7 +4,7 @@ EXPECTED_ALL = [
     "__version__",
     "MariaDBChatMessageHistory",
     "MariaDBStore",
-    "FilterExpressionBuilder",
+    "MariaDBTranslator",
 ]
 
 
