@@ -478,7 +478,9 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
         context.append(",")
 
 
-def _transform_to_expression(filters: Union[None, dict] = None) -> Expression | None:
+def _transform_to_expression(
+    filters: Union[None, dict] = None,
+) -> Union[Expression, None]:
     """Create an Expression from a dictionary filter.
 
     Args:
@@ -592,7 +594,7 @@ def _transform_to_expression(filters: Union[None, dict] = None) -> Expression | 
         )
 
 
-def _ensureValue(val: Expression | None) -> Expression:
+def _ensureValue(val: Union[Expression, None]) -> Expression:
     if val is None:
         raise ValueError("Invalid filter value: Expected Expression, but got None")
     return val
