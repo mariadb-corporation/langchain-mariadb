@@ -34,15 +34,8 @@ from sqlalchemy.engine import Engine
 
 # Local
 from langchain_mariadb._utils import enquote_identifier
-from langchain_mariadb.expression_filter import (
-    BaseFilterExpressionConverter,
-    StringBuilder,
-    Expression,
-    Key,
-    Value,
-    Group,
-    FilterExpressionBuilder,
-)
+from langchain_mariadb.expression_filter import BaseFilterExpressionConverter, Expression, StringBuilder, Key, Value, \
+    Group
 
 """
 MariaDBStore is a vector store implementation that uses MariaDB database.
@@ -216,31 +209,6 @@ Distance Strategies:
 # Constants
 # ------------------------------------------------------------------------------
 _LANGCHAIN_DEFAULT_COLLECTION_NAME = "langchain"
-f = FilterExpressionBuilder()
-
-# Operator mappings
-COMPARISONS_TO_NATIVE = {
-    "$eq": f.eq,
-    "$ne": f.ne,
-    "$lt": f.lt,
-    "$lte": f.lte,
-    "$gt": f.gt,
-    "$gte": f.gte,
-}
-
-SPECIAL_CASED_OPERATORS = {
-    "$in": f.includes,
-    "$nin": f.excludes,
-    "$like": f.like,
-    "$nlike": f.nlike,
-}
-
-LOGICAL_OPERATORS = {"$and": f.both, "$or": f.either, "$not": f.negate}
-
-SUPPORTED_OPERATORS = (
-    set(COMPARISONS_TO_NATIVE).union(LOGICAL_OPERATORS).union(SPECIAL_CASED_OPERATORS)
-)
-
 
 # ------------------------------------------------------------------------------
 # Helper Classes
@@ -867,7 +835,7 @@ class MariaDBStore(VectorStore):
         self,
         query: str,
         k: int = 4,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Document]:
         """Run similarity search with MariaDB.
@@ -892,7 +860,7 @@ class MariaDBStore(VectorStore):
         self,
         query: str,
         k: int = 4,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
     ) -> List[Tuple[Document, float]]:
         """Return docs most similar to query along with scores.
 
@@ -1306,7 +1274,7 @@ class MariaDBStore(VectorStore):
         self,
         distance_or_score_expr: str,
         need_embeddings: bool = False,
-        filter: Union[None, dict, Expression] = None,
+        filter: Union[None, dict] = None,
     ) -> Tuple[str, str]:
         """Build base SELECT query with common components.
 
@@ -1411,93 +1379,7 @@ class MariaDBStore(VectorStore):
         finally:
             con.close()
 
-    # Filter methods
-    def _handle_field_filter(
-        self,
-        field: str,
-        value: Any,
-    ) -> Expression:
-        """Create a filter for a specific field.
-
-        Args:
-            field: Name of field to filter on
-            value: Value to filter by. Can be:
-                - Direct value for equality filter
-                - Dict with operator and value for other filters
-
-        Returns:
-            Filter expression
-
-        Raises:
-            ValueError: If field name or filter specification is invalid
-        """
-        if not isinstance(field, str):
-            raise ValueError(
-                f"Field should be a string but got: {type(field)} with value: {field}"
-            )
-
-        if field.startswith("$"):
-            raise ValueError(
-                f"Invalid filter condition. Expected a field but got an operator: {field}"
-            )
-
-        # Allow [a-zA-Z0-9_], disallow $ for now until we support escape characters
-        if not field.isidentifier():
-            raise ValueError(
-                f"Invalid field name: {field}. Expected a valid identifier."
-            )
-
-        if isinstance(value, dict):
-            # This is a filter specification
-            if len(value) != 1:
-                raise ValueError(
-                    "Invalid filter condition. Expected a dictionary with a single key "
-                    f"that corresponds to an operator but got {len(value)} keys. "
-                    f"The first few keys are: {list(value.keys())[:3]}"
-                )
-            operator, filter_value = list(value.items())[0]
-
-            # Verify operator is valid
-            if operator not in SUPPORTED_OPERATORS:
-                raise ValueError(
-                    f"Invalid operator: {operator}. Expected one of {SUPPORTED_OPERATORS}"
-                )
-        else:
-            # Default to equality filter
-            operator = "$eq"
-            filter_value = value
-
-        if operator in COMPARISONS_TO_NATIVE:
-            return COMPARISONS_TO_NATIVE[operator](field, filter_value)
-        elif operator in {"$in", "$nin", "$like", "$nlike"}:
-            if operator in {"$in", "$nin"}:
-                for val in filter_value:
-                    if not isinstance(val, (str, int, float)):
-                        raise NotImplementedError(
-                            f"Unsupported type: {type(val)} for value: {val}"
-                        )
-                    if isinstance(val, bool):
-                        raise NotImplementedError(
-                            f"Unsupported type: {type(val)} for value: {val}"
-                        )
-            else:
-                for val in filter_value:
-                    if not isinstance(val, str):
-                        raise NotImplementedError(
-                            f"Unsupported type: {type(val)} for value: {val}"
-                        )
-            if operator == "$in":
-                return f.includes(field, filter_value)
-            elif operator == "$nin":
-                return f.excludes(field, filter_value)
-            elif operator == "$like":
-                return f.like(field, filter_value)
-            else:
-                return f.nlike(field, filter_value)
-        else:
-            raise NotImplementedError(f"Operator {operator} not implemented")
-
-    def _create_filter_sql(self, filters: Union[None, dict, Expression] = None) -> str:
+    def _create_filter_sql(self, filters: Union[None, dict] = None) -> str:
         if filters is None:
             return ""
         exp = self._create_filter_clause(filters)
@@ -1505,148 +1387,6 @@ class MariaDBStore(VectorStore):
             return ""
         return self._expression_converter.convert_expression(exp)
 
-    def _create_filter_clause(
-        self, filters: Union[None, dict, Expression] = None
-    ) -> Expression | None:
-        """Create a filter clause from the provided filters.
-
-        Args:
-            filters: Dictionary of filters or Expression object
-
-        Returns:
-            Expression object representing the filter clause, or None if no filters
-
-        Raises:
-            ValueError: If filter specification is invalid
-        """
-        if filters is None:
-            return None
-
-        if isinstance(filters, Expression):
-            return filters
-
-        if isinstance(filters, dict):
-            if len(filters) == 1:
-                # Check for top-level operators ($AND, $OR, $NOT)
-                key, value = list(filters.items())[0]
-                if key.startswith("$"):
-                    # Validate operator
-                    if key.lower() not in ["$and", "$or", "$not"]:
-                        raise ValueError(
-                            f"Invalid filter condition. Expected $and, $or or $not "
-                            f"but got: {key}"
-                        )
-                else:
-                    # Single field filter
-                    return self._handle_field_filter(key, filters[key])
-
-                # Handle logical operators
-                if key.lower() == "$and":
-                    if not isinstance(value, list) or len(value) < 2:
-                        raise ValueError(
-                            f"Expected a list of at least 2 elements for $and, "
-                            f"but got: {value}"
-                        )
-
-                    # Build AND chain
-                    val0 = self._ensureValue(self._create_filter_clause(value[0]))
-                    exp = self._ensureValue(self._create_filter_clause(value[1]))
-
-                    _len = len(value)
-                    while _len > 2:
-                        v1 = self._create_filter_clause(value[_len - 1])
-                        v2 = self._create_filter_clause(value[_len - 2])
-                        if v1 is None:
-                            if v2 is not None:
-                                exp = v2
-                        else:
-                            if v2 is None:
-                                exp = v1
-                            else:
-                                exp = f.both(
-                                    self._ensureValue(
-                                        self._create_filter_clause(value[_len - 1])
-                                    ),
-                                    self._ensureValue(
-                                        self._create_filter_clause(value[_len - 2])
-                                    ),
-                                )
-                        _len = _len - 1
-
-                    return f.both(val0, exp)
-
-                elif key.lower() == "$or":
-                    if not isinstance(value, list) or len(value) < 2:
-                        raise ValueError(
-                            f"Expected a list of at least 2 elements for $or, "
-                            f"but got: {value}"
-                        )
-
-                    # Build OR chain
-                    val0 = self._ensureValue(self._create_filter_clause(value[0]))
-                    exp = self._ensureValue(self._create_filter_clause(value[1]))
-
-                    _len = len(value)
-                    while _len > 2:
-                        exp = f.either(
-                            self._ensureValue(
-                                self._create_filter_clause(value[_len - 1])
-                            ),
-                            self._ensureValue(
-                                self._create_filter_clause(value[_len - 2])
-                            ),
-                        )
-                        _len = _len - 1
-
-                    return f.either(val0, exp)
-
-                else:  # key.lower() == "$not":
-                    # Handle NOT operator
-                    if isinstance(value, Expression):
-                        return f.negate(value)
-                    if isinstance(value, dict):
-                        return f.negate(
-                            self._ensureValue(self._create_filter_clause(value))
-                        )
-                    if isinstance(value, list) and len(value) == 1:
-                        value = value[0]
-                        if isinstance(value, (Expression, dict)):
-                            return f.negate(
-                                self._ensureValue(self._create_filter_clause(value))
-                            )
-
-                    raise ValueError(
-                        f"Invalid filter condition for $not. Expected Expression, dict, "
-                        f"or list with single item, but got: {type(value)}"
-                    )
-
-            elif len(filters) > 1:
-                # Multiple field filters - combine with AND
-                for key in filters:
-                    if key.startswith("$"):
-                        raise ValueError(
-                            f"Invalid filter condition. Expected a field but got: {key}"
-                        )
-                expressions = [
-                    self._handle_field_filter(k, v) for k, v in filters.items()
-                ]
-                if len(expressions) > 1:
-                    return f.both(expressions[0], expressions[1])
-                elif expressions:
-                    return expressions[0]
-                else:
-                    raise ValueError("No valid expressions in filter")
-            else:
-                raise ValueError("Got an empty dictionary for filters")
-        else:
-            raise ValueError(
-                f"Invalid filter type: Expected dict or Expression but got {type(filters)}"
-            )
-
-    def _ensureValue(self, val: Expression | None) -> Expression:
-        if val is None:
-            raise ValueError("Invalid filter value: Expected Expression, but got None")
-        return val
 
     # Result processing methods
     def _results_to_docs_and_scores(self, results: Any) -> List[Tuple[Document, float]]:
@@ -1902,3 +1642,4 @@ class MariaDBStore(VectorStore):
             metadatas=metadatas,
             **kwargs,
         )
+

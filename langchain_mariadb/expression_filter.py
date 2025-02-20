@@ -5,65 +5,18 @@ This module provides a builder pattern implementation for creating complex filte
 expressions that can be converted to various query formats.
 
 Example:
-    >>> # Create a builder instance
-    >>> builder = FilterExpressionBuilder()
-    >>> 
-    >>> # Build a complex filter expression
-    >>> filter_exp = builder.both(
-    ...     builder.either(
-    ...         builder.eq("status", "active"),
-    ...         builder.eq("status", "pending")
-    ...     ),
-    ...     builder.both(
-    ...         builder.gte("age", 18),
-    ...         builder.includes("country", ["US", "CA", "UK"])
-    ...     )
-    ... )
-    >>> 
+    >>> # Dict filter value
+    >>> filter = {
+    ...    '$or': [{'status': {'$eq': 'active'}}, {'status': {'$eq': 'pending'}}],
+    ...    'age': {'$gte': 18}
+    ...    'country': {'$in': ['US', 'CA', 'UK']}
+    ...}
+    >>>
     >>> # Convert to SQL-like string (with a proper converter implementation)
-    >>> converter = SQLFilterExpressionConverter()  # Example converter
-    >>> sql_where = converter.convert_expression(filter_exp)
+    >>> converter = SQLFilterExpressionConverter()  # Some converter
+    >>> sql_where = converter.convert_expression(filter)
     >>> print(sql_where)
-    >>> # Output: (status = 'active' OR status = 'pending') AND (age >= 18 AND country IN ['US','CA','UK'])
-    
-The expression above would match records where:
-- status is either 'active' or 'pending' AND
-- age is 18 or greater AND
-- country is one of US, CA, or UK
-
-Features:
-    - Composable filter expressions
-    - Support for common operators (=, !=, >, >=, <, <=)
-    - List operations (includes, excludes)
-    - Logical operations (both, either, negate)
-    - Pattern matching (like, nlike)
-    - Grouping for complex conditions
-    - Extensible conversion system for different output formats
-
-Available Methods:
-    Comparison:
-        - eq(key, value)      # Equal to
-        - ne(key, value)      # Not equal to
-        - gt(key, value)      # Greater than
-        - gte(key, value)     # Greater than or equal
-        - lt(key, value)      # Less than
-        - lte(key, value)     # Less than or equal
-        
-    Pattern Matching:
-        - like(key, pattern)  # Pattern matching
-        - nlike(key, pattern) # Negative pattern matching
-        
-    List Operations:
-        - includes(key, list) # Check if value is in list
-        - excludes(key, list) # Check if value is not in list
-        
-    Logical Operations:
-        - both(left, right)   # Logical AND
-        - either(left, right) # Logical OR
-        - negate(expression)  # Logical NOT
-        
-    Grouping:
-        - group(expression)   # Group expressions together
+    >>> # Output: (status = 'active' OR status = 'pending') AND age >= 18 AND country IN ['US','CA','UK']
 """
 
 from enum import Enum, auto
@@ -177,88 +130,296 @@ class StringBuilder:
         return self._length
 
 
-class FilterExpressionBuilder:
+
+
+def eq(key: str, value: ValueType) -> Expression:
+    return Expression(
+        Operator.EQ, Key(key), Value(value) if value is not None else None
+    )
+
+def ne(key: str, value: ValueType) -> Expression:
+    return Expression(
+        Operator.NE, Key(key), Value(value) if value is not None else None
+    )
+
+def gt(key: str, value: Union[int, str, float]) -> Expression:
+    return Expression(
+        Operator.GT, Key(key), Value(value) if value is not None else None
+    )
+
+def gte(key: str, value: Union[int, str, float]) -> Expression:
+    return Expression(
+        Operator.GTE, Key(key), Value(value) if value is not None else None
+    )
+
+def lt(key: str, value: Union[int, str, float]) -> Expression:
+    return Expression(
+        Operator.LT, Key(key), Value(value) if value is not None else None
+    )
+
+def lte(key: str, value: Union[int, str, float]) -> Expression:
+    return Expression(
+        Operator.LTE, Key(key), Value(value) if value is not None else None
+    )
+
+def like(key: str, value: Union[int, str, float]) -> Expression:
+    return Expression(
+        Operator.LIKE, Key(key), Value(value) if value is not None else None
+    )
+
+def nlike(key: str, value: Union[int, str, float]) -> Expression:
+    return Expression(
+        Operator.NLIKE, Key(key), Value(value) if value is not None else None
+    )
+
+def includes(key: str, values: Union[List[int], List[str], List[bool], List[float]]
+) -> Expression:
+    """Check if a key's value is in a list of values (formerly in_)"""
+    return Expression(
+        Operator.IN, Key(key), Value(values) if values is not None else None
+    )
+
+def excludes(key: str, values: Union[List[int], List[str], List[bool], List[float]]
+) -> Expression:
+    """Check if a key's value is not in a list of values (formerly nin)"""
+    return Expression(
+        Operator.NIN, Key(key), Value(values) if values is not None else None
+    )
+
+def both(left: Operand, right: Operand) -> Expression:
+    """Combine two expressions with AND"""
+    return Expression(Operator.AND, left, right)
+
+def either(left: Operand, right: Operand) -> Expression:
+    """Combine two expressions with OR"""
+    return Expression(Operator.OR, left, right)
+
+def negate(content: Expression) -> Expression:
+    """Negate an expression (i.e. NOT)"""
+    return Expression(Operator.NOT, content)
+
+def group(content: Expression) -> Group:
+    return Group(content)
+
+# Operator mappings
+STANDARD_SIMPLE_OPERATOR = {
+    "$eq": eq,
+    "$ne": ne,
+    "$lt": lt,
+    "$lte": lte,
+    "$gt": gt,
+    "$gte": gte,
+}
+
+STANDARD_LIST_OPERATOR = {
+    "$in": includes,
+    "$nin": excludes,
+}
+
+STANDARD_STRING_ONLY_OPERATOR = {
+    "$like": like,
+    "$nlike": nlike,
+}
+
+GROUP_OPERATORS = {
+    "$and": both,
+    "$or": either,
+    "$not": negate
+}
+
+SUPPORTED_OPERATORS = (
+    set(STANDARD_SIMPLE_OPERATOR).union(STANDARD_LIST_OPERATOR).union(GROUP_OPERATORS).union(STANDARD_STRING_ONLY_OPERATOR)
+)
+
+
+def _create_filter_clause(filters: Union[None, dict] = None) -> Expression | None:
+    """Create a filter clause from the provided filters.
+
+    Args:
+        filters: Dictionary of filters
+
+    Returns:
+        Expression object representing the filter clause, or None if no filters
+
+    Raises:
+        ValueError: If filter specification is invalid
     """
-    Fluent builder for creating flexible and composable filter expressions
+    if filters is None:
+        return None
 
-    Features:
-    - Equality and inequality checks
-    - Numeric comparisons (greater than, less than, etc.)
-    - Logical combinations (AND, OR, NOT)
-    - Collection membership tests (IN, NOT IN)
-    - Expression grouping for complex nested conditions
-    """
+    if isinstance(filters, dict):
+        if len(filters) == 1:
+            # Check for top-level operators ($AND, $OR, $NOT)
+            key, value = list(filters.items())[0]
+            if key.startswith("$"):
+                # Validate operator
+                if key.lower() not in GROUP_OPERATORS.keys():
+                    raise ValueError(
+                        f"Invalid filter condition. Expected $and, $or or $not "
+                        f"but got: {key}"
+                    )
+            else:
+                # Single field filter
+                return _handle_field_filter(key, filters[key])
 
-    def eq(self, key: str, value: ValueType) -> Expression:
-        return Expression(
-            Operator.EQ, Key(key), Value(value) if value is not None else None
+            # Handle logical operators
+            if key.lower() == "$and" or key.lower() == "$or":
+                if not isinstance(value, list) or len(value) < 2:
+                    raise ValueError(
+                        f"Expected a list of at least 2 elements for $and/$or, "
+                        f"but got: {value}"
+                    )
+                    # Build AND chain
+                val0 = _ensureValue(_create_filter_clause(value[0]))
+                exp = _ensureValue(_create_filter_clause(value[1]))
+
+                _len = len(value)
+                while _len > 2:
+                    v1 = _create_filter_clause(value[_len - 1])
+                    v2 = _create_filter_clause(value[_len - 2])
+                    if v1 is None:
+                        if v2 is not None:
+                            exp = v2
+                    else:
+                        if v2 is None:
+                            exp = v1
+                        else:
+                            if key.lower() == "$and":
+                                exp = both(
+                                    _ensureValue(_create_filter_clause(value[_len - 1])),
+                                    _ensureValue(_create_filter_clause(value[_len - 2])),
+                                )
+                            else:
+                                exp = either(
+                                    _ensureValue(_create_filter_clause(value[_len - 1])),
+                                    _ensureValue(_create_filter_clause(value[_len - 2])),
+                                )
+                    _len = _len - 1
+                if key.lower() == "$and":
+                    return both(val0, exp)
+                else:
+                    return either(val0, exp)
+
+            else:  # key.lower() == "$not":
+                # Handle NOT operator
+                if isinstance(value, Expression):
+                    return negate(value)
+                if isinstance(value, dict):
+                    return negate(_ensureValue(_create_filter_clause(value)))
+                if isinstance(value, list) and len(value) == 1:
+                    value = value[0]
+                    if isinstance(value, (Expression, dict)):
+                        return negate(_ensureValue(_create_filter_clause(value)))
+
+                raise ValueError(
+                    f"Invalid filter condition for $not. Expected Expression, dict, "
+                    f"or list with single item, but got: {type(value)}"
+                )
+
+        elif len(filters) > 1:
+            # Multiple field filters - combine with AND
+            for key in filters:
+                if key.startswith("$"):
+                    raise ValueError(
+                        f"Invalid filter condition. Expected a field but got: {key}"
+                    )
+            expressions = [
+                _handle_field_filter(k, v) for k, v in filters.items()
+            ]
+            if len(expressions) > 1:
+                return both(expressions[0], expressions[1])
+            elif expressions:
+                return expressions[0]
+            else:
+                raise ValueError("No valid expressions in filter")
+        else:
+            raise ValueError("Got an empty dictionary for filters")
+    else:
+        raise ValueError(
+            f"Invalid filter type: Expected dict or Expression but got {type(filters)}"
         )
 
-    def ne(self, key: str, value: ValueType) -> Expression:
-        return Expression(
-            Operator.NE, Key(key), Value(value) if value is not None else None
-        )
+def _ensureValue(val: Expression | None) -> Expression:
+    if val is None:
+        raise ValueError("Invalid filter value: Expected Expression, but got None")
+    return val
 
-    def gt(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(
-            Operator.GT, Key(key), Value(value) if value is not None else None
-        )
+    # Filter methods
+def _handle_field_filter(field: str, value: Any,) -> Expression:
+        """Create a filter for a specific field.
 
-    def gte(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(
-            Operator.GTE, Key(key), Value(value) if value is not None else None
-        )
+        Args:
+            field: Name of field to filter on
+            value: Value to filter by. Can be:
+                - Direct value for equality filter
+                - Dict with operator and value for other filters
 
-    def lt(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(
-            Operator.LT, Key(key), Value(value) if value is not None else None
-        )
+        Returns:
+            Filter expression
 
-    def lte(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(
-            Operator.LTE, Key(key), Value(value) if value is not None else None
-        )
+        Raises:
+            ValueError: If field name or filter specification is invalid
+        """
+        if not isinstance(field, str):
+            raise ValueError(
+                f"Field should be a string but got: {type(field)} with value: {field}"
+            )
 
-    def like(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(
-            Operator.LIKE, Key(key), Value(value) if value is not None else None
-        )
+        if field.startswith("$"):
+            raise ValueError(
+                f"Invalid filter condition. Expected a field but got an operator: {field}"
+            )
 
-    def nlike(self, key: str, value: Union[int, str, float]) -> Expression:
-        return Expression(
-            Operator.NLIKE, Key(key), Value(value) if value is not None else None
-        )
+        # Allow [a-zA-Z0-9_] only
+        if not field.isidentifier():
+            raise ValueError(
+                f"Invalid field name: {field}. Expected a valid identifier."
+            )
 
-    def includes(
-        self, key: str, values: Union[List[int], List[str], List[bool], List[float]]
-    ) -> Expression:
-        """Check if a key's value is in a list of values (formerly in_)"""
-        return Expression(
-            Operator.IN, Key(key), Value(values) if values is not None else None
-        )
+        if isinstance(value, dict):
+            if len(value) != 1:
+                raise ValueError(
+                    "Invalid filter condition. Expected a dictionary with a single key "
+                    f"that corresponds to an operator but got {len(value)} keys. "
+                    f"The first few keys are: {list(value.keys())[:3]}"
+                )
+            operator, filter_value = list(value.items())[0]
 
-    def excludes(
-        self, key: str, values: Union[List[int], List[str], List[bool], List[float]]
-    ) -> Expression:
-        """Check if a key's value is not in a list of values (formerly nin)"""
-        return Expression(
-            Operator.NIN, Key(key), Value(values) if values is not None else None
-        )
+            # Verify operator is valid
+            if operator not in SUPPORTED_OPERATORS:
+                raise ValueError(
+                    f"Invalid operator: {operator}. Expected one of {SUPPORTED_OPERATORS}"
+                )
+        else:
+            # Default to equality filter
+            operator = "$eq"
+            filter_value = value
 
-    def both(self, left: Operand, right: Operand) -> Expression:
-        """Combine two expressions with AND"""
-        return Expression(Operator.AND, left, right)
-
-    def either(self, left: Operand, right: Operand) -> Expression:
-        """Combine two expressions with OR"""
-        return Expression(Operator.OR, left, right)
-
-    def negate(self, content: Expression) -> Expression:
-        """Negate an expression (i.e. NOT)"""
-        return Expression(Operator.NOT, content)
-
-    def group(self, content: Expression) -> Group:
-        return Group(content)
+        if operator in STANDARD_SIMPLE_OPERATOR:
+            return STANDARD_SIMPLE_OPERATOR[operator](field, filter_value)
+        elif operator in STANDARD_STRING_ONLY_OPERATOR:
+            for val in filter_value:
+                if not isinstance(val, str):
+                    raise NotImplementedError(
+                        f"Unsupported type: {type(val)} for value: {val}"
+                    )
+            return STANDARD_STRING_ONLY_OPERATOR[operator](field, filter_value)
+        elif operator in STANDARD_LIST_OPERATOR:
+            for val in filter_value:
+                if not isinstance(val, (str, int, float)):
+                    raise NotImplementedError(
+                        f"Unsupported type: {type(val)} for value: {val}"
+                    )
+                if isinstance(val, bool):
+                    raise NotImplementedError(
+                        f"Unsupported type: {type(val)} for value: {val}"
+                    )
+            if operator == "$in":
+                return includes(field, filter_value)
+            else:
+                return excludes(field, filter_value)
+        else:
+            raise NotImplementedError(f"Operator {operator} not implemented")
 
 
 class FilterExpressionConverter(ABC):

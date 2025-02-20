@@ -2,7 +2,7 @@ from importlib import metadata
 
 from langchain_mariadb.chat_message_histories import MariaDBChatMessageHistory
 from langchain_mariadb.vectorstores import MariaDBStore
-from langchain_mariadb.expression_filter import FilterExpressionBuilder
+from langchain_mariadb.translator import MariaDBTranslator
 
 try:
     __version__ = metadata.version(__package__)
@@ -14,5 +14,5 @@ __all__ = [
     "__version__",
     "MariaDBChatMessageHistory",
     "MariaDBStore",
-    "FilterExpressionBuilder",
+    "MariaDBTranslator",
 ]

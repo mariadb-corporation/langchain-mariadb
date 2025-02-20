@@ -22,11 +22,6 @@ from tests.unit_tests.fixtures.filtering_test_cases import (
     TYPE_3_FILTERING_TEST_CASES,
     TYPE_4_FILTERING_TEST_CASES,
     TYPE_5_FILTERING_TEST_CASES,
-    TYPE_1_EXP_FILTERING_TEST_CASES,
-    TYPE_2_EXP_FILTERING_TEST_CASES,
-    TYPE_3_EXP_FILTERING_TEST_CASES,
-    TYPE_4_EXP_FILTERING_TEST_CASES,
-    TYPE_5_EXP_FILTERING_TEST_CASES,
 )
 from tests.utils import pool, url
 
@@ -1076,62 +1071,6 @@ def test_mariadb_store_with_with_metadata_filters_5(
     """Test end to end construction and search."""
     docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
     assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
-
-
-@pytest.mark.parametrize("test_filter, expected_ids", TYPE_1_EXP_FILTERING_TEST_CASES)
-def test_mariadb_store_with_with_metadata_filters_exp_1(
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
-) -> None:
-    """Test end to end construction and search."""
-    with get_vectorstore() as MariaDBStore:
-        docs = MariaDBStore.similarity_search("meow", k=5, filter=test_filter)
-        assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
-
-
-@pytest.mark.parametrize("test_filter, expected_ids", TYPE_2_EXP_FILTERING_TEST_CASES)
-def test_mariadb_store_with_with_metadata_filters_exp_2(
-    mariadb_store,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
-) -> None:
-    """Test end to end construction and search."""
-    docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
-    assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
-
-
-@pytest.mark.parametrize("test_filter, expected_ids", TYPE_3_EXP_FILTERING_TEST_CASES)
-def test_mariadb_store_with_with_metadata_filters_exp_3(
-    mariadb_store,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
-) -> None:
-    """Test end to end construction and search."""
-    docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
-    assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
-
-
-@pytest.mark.parametrize("test_filter, expected_ids", TYPE_4_EXP_FILTERING_TEST_CASES)
-def test_mariadb_store_with_with_metadata_filters_exp_4(
-    mariadb_store,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
-) -> None:
-    """Test end to end construction and search."""
-    docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
-    assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
-
-
-@pytest.mark.parametrize("test_filter, expected_ids", TYPE_5_EXP_FILTERING_TEST_CASES)
-def test_mariadb_store_with_with_metadata_filters_exp_5(
-    mariadb_store,
-    test_filter: Dict[str, Any],
-    expected_ids: List[int],
-) -> None:
-    """Test end to end construction and search."""
-    docs = mariadb_store.similarity_search("meow", k=5, filter=test_filter)
-    assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
-
 
 @pytest.mark.parametrize(
     "invalid_filter",
