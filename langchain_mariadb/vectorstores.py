@@ -145,11 +145,11 @@ Advanced Usage:
     Custom configuration:
     ```python
     from langchain_mariadb import (
-       MariaDBStore, StoreConfig, TableConfig, ColumnConfig
+       MariaDBStore, MariaDBStoreSettings, TableConfig, ColumnConfig
     }
 
     # Configure custom table and column names
-    config = StoreConfig(
+    config = MariaDBStoreSettings(
         tables=TableConfig(
             embedding_table="custom_embeddings",
             collection_table="custom_collections"
@@ -338,7 +338,7 @@ class ColumnConfig:
 
 
 @dataclass
-class StoreConfig:
+class MariaDBStoreSettings:
     """Configuration for MariaDBStore."""
 
     tables: TableConfig
@@ -351,7 +351,7 @@ class StoreConfig:
         columns: Optional[ColumnConfig] = None,
         pre_delete_collection: bool = False,
     ) -> None:
-        """Initialize StoreConfig with custom or default configurations.
+        """Initialize MariaDBStoreSettings with custom or default configurations.
 
         Args:
             tables: Table configuration (default: TableConfig.default())
@@ -363,8 +363,8 @@ class StoreConfig:
         self.pre_delete_collection = pre_delete_collection
 
     @classmethod
-    def default(cls) -> "StoreConfig":
-        """Create StoreConfig with default values."""
+    def default(cls) -> "MariaDBStoreSettings":
+        """Create MariaDBStoreSettings with default values."""
         return cls()
 
 
@@ -386,7 +386,7 @@ class MariaDBStore(VectorStore):
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         collection_metadata: Optional[dict] = None,
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
-        config: StoreConfig = StoreConfig(),
+        config: MariaDBStoreSettings = MariaDBStoreSettings(),
         logger: Optional[logging.Logger] = None,
         engine_args: Optional[dict[str, Any]] = None,
         relevance_score_fn: Optional[Callable[[float], float]] = None,
@@ -400,7 +400,7 @@ class MariaDBStore(VectorStore):
             collection_name: Name of the collection to store vectors (default: langchain)
             collection_metadata: Optional metadata for the collection
             distance_strategy: Strategy for computing vector distances (COSINE or EUCLIDEAN)
-            config: Store configuration for tables and columns (default: StoreConfig())
+            config: Store configuration for tables and columns (default: MariaDBStoreSettings())
             logger: Optional logger instance for debugging
             relevance_score_fn: Optional function to override relevance score calculation
         """
@@ -1417,7 +1417,7 @@ class MariaDBStore(VectorStore):
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
         logger: Optional[logging.Logger] = None,
         relevance_score_fn: Optional[Callable[[float], float]] = None,
-        config: StoreConfig = StoreConfig(),
+        config: MariaDBStoreSettings = MariaDBStoreSettings(),
         **kwargs: Any,
     ) -> MariaDBStore:
         """Internal method to create a MariaDBStore instance from texts and embeddings.
@@ -1492,7 +1492,7 @@ class MariaDBStore(VectorStore):
             collection_name: Name of the collection to store vectors (default: langchain)
             distance_strategy: Strategy for computing vector distances (COSINE or EUCLIDEAN)
             embedding_length: Length of embedding vectors (default: 1536)
-            config: Store configuration for tables and columns (default: StoreConfig())
+            config: Store configuration for tables and columns (default: MariaDBStoreSettings())
             logger: Optional logger instance for debugging
             relevance_score_fn: Optional function to override relevance score calculation
             **kwargs: Additional arguments passed to add_embeddings
@@ -1522,7 +1522,7 @@ class MariaDBStore(VectorStore):
         embedding: Embeddings,
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
         relevance_score_fn: Optional[Callable[[float], float]] = None,
-        config: StoreConfig = StoreConfig(),
+        config: MariaDBStoreSettings = MariaDBStoreSettings(),
         **kwargs: Any,
     ) -> MariaDBStore:
         """Create a MariaDBStore instance from text-embedding pairs.
@@ -1573,7 +1573,7 @@ class MariaDBStore(VectorStore):
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
         datasource: Union[mariadb.ConnectionPool | Engine | str],
-        config: StoreConfig = StoreConfig(),
+        config: MariaDBStoreSettings = MariaDBStoreSettings(),
         **kwargs: Any,
     ) -> MariaDBStore:
         """Create a MariaDBStore instance from an existing index.

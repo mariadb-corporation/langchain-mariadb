@@ -245,206 +245,6 @@ SUPPORTED_OPERATORS = (
 )
 
 
-def _create_filter_clause(filters: Union[None, dict] = None) -> Expression | None:
-    """Create a filter clause from the provided filters.
-
-    Args:
-        filters: Dictionary of filters
-
-    Returns:
-        Expression object representing the filter clause, or None if no filters
-
-    Raises:
-        ValueError: If filter specification is invalid
-    """
-    if filters is None:
-        return None
-
-    if isinstance(filters, dict):
-        if len(filters) == 1:
-            # Check for top-level operators ($AND, $OR, $NOT)
-            key, value = list(filters.items())[0]
-            if key.startswith("$"):
-                # Validate operator
-                if key.lower() not in GROUP_OPERATORS.keys():
-                    raise ValueError(
-                        f"Invalid filter condition. Expected $and, $or or $not "
-                        f"but got: {key}"
-                    )
-            else:
-                # Single field filter
-                return _handle_field_filter(key, filters[key])
-
-            # Handle logical operators
-            if key.lower() == "$and" or key.lower() == "$or":
-                if not isinstance(value, list) or len(value) < 2:
-                    raise ValueError(
-                        f"Expected a list of at least 2 elements for $and/$or, "
-                        f"but got: {value}"
-                    )
-                    # Build AND chain
-                val0 = _ensureValue(_create_filter_clause(value[0]))
-                exp = _ensureValue(_create_filter_clause(value[1]))
-
-                _len = len(value)
-                while _len > 2:
-                    v1 = _create_filter_clause(value[_len - 1])
-                    v2 = _create_filter_clause(value[_len - 2])
-                    if v1 is None:
-                        if v2 is not None:
-                            exp = v2
-                    else:
-                        if v2 is None:
-                            exp = v1
-                        else:
-                            if key.lower() == "$and":
-                                exp = both(
-                                    _ensureValue(
-                                        _create_filter_clause(value[_len - 1])
-                                    ),
-                                    _ensureValue(
-                                        _create_filter_clause(value[_len - 2])
-                                    ),
-                                )
-                            else:
-                                exp = either(
-                                    _ensureValue(
-                                        _create_filter_clause(value[_len - 1])
-                                    ),
-                                    _ensureValue(
-                                        _create_filter_clause(value[_len - 2])
-                                    ),
-                                )
-                    _len = _len - 1
-                if key.lower() == "$and":
-                    return both(val0, exp)
-                else:
-                    return either(val0, exp)
-
-            else:  # key.lower() == "$not":
-                # Handle NOT operator
-                if isinstance(value, Expression):
-                    return negate(value)
-                if isinstance(value, dict):
-                    return negate(_ensureValue(_create_filter_clause(value)))
-                if isinstance(value, list) and len(value) == 1:
-                    value = value[0]
-                    if isinstance(value, dict):
-                        return negate(_ensureValue(_create_filter_clause(value)))
-
-                raise ValueError(
-                    f"Invalid filter condition for $not. Expected Expression, dict, "
-                    f"or list with single item, but got: {type(value)}"
-                )
-
-        elif len(filters) > 1:
-            # Multiple field filters - combine with AND
-            for key in filters:
-                if key.startswith("$"):
-                    raise ValueError(
-                        f"Invalid filter condition. Expected a field but got: {key}"
-                    )
-            expressions = [_handle_field_filter(k, v) for k, v in filters.items()]
-            if len(expressions) > 1:
-                return both(expressions[0], expressions[1])
-            elif expressions:
-                return expressions[0]
-            else:
-                raise ValueError("No valid expressions in filter")
-        else:
-            raise ValueError("Got an empty dictionary for filters")
-    else:
-        raise ValueError(
-            f"Invalid filter type: Expected dict or Expression but got {type(filters)}"
-        )
-
-
-def _ensureValue(val: Expression | None) -> Expression:
-    if val is None:
-        raise ValueError("Invalid filter value: Expected Expression, but got None")
-    return val
-
-    # Filter methods
-
-
-def _handle_field_filter(
-    field: str,
-    value: Any,
-) -> Expression:
-    """Create a filter for a specific field.
-
-    Args:
-        field: Name of field to filter on
-        value: Value to filter by. Can be:
-            - Direct value for equality filter
-            - Dict with operator and value for other filters
-
-    Returns:
-        Filter expression
-
-    Raises:
-        ValueError: If field name or filter specification is invalid
-    """
-    if not isinstance(field, str):
-        raise ValueError(
-            f"Field should be a string but got: {type(field)} with value: {field}"
-        )
-
-    if field.startswith("$"):
-        raise ValueError(
-            f"Invalid filter condition. Expected a field but got an operator: {field}"
-        )
-
-    # Allow [a-zA-Z0-9_] only
-    if not field.isidentifier():
-        raise ValueError(f"Invalid field name: {field}. Expected a valid identifier.")
-
-    if isinstance(value, dict):
-        if len(value) != 1:
-            raise ValueError(
-                "Invalid filter condition. Expected a dictionary with a single key "
-                f"that corresponds to an operator but got {len(value)} keys. "
-                f"The first few keys are: {list(value.keys())[:3]}"
-            )
-        operator, filter_value = list(value.items())[0]
-
-        # Verify operator is valid
-        if operator not in SUPPORTED_OPERATORS:
-            raise ValueError(
-                f"Invalid operator: {operator}. Expected one of {SUPPORTED_OPERATORS}"
-            )
-    else:
-        # Default to equality filter
-        operator = "$eq"
-        filter_value = value
-
-    if operator in STANDARD_SIMPLE_OPERATOR:
-        return STANDARD_SIMPLE_OPERATOR[operator](field, filter_value)
-    elif operator in STANDARD_STRING_ONLY_OPERATOR:
-        for val in filter_value:
-            if not isinstance(val, str):
-                raise NotImplementedError(
-                    f"Unsupported type: {type(val)} for value: {val}"
-                )
-        return STANDARD_STRING_ONLY_OPERATOR[operator](field, filter_value)
-    elif operator in STANDARD_LIST_OPERATOR:
-        for val in filter_value:
-            if not isinstance(val, (str, int, float)):
-                raise NotImplementedError(
-                    f"Unsupported type: {type(val)} for value: {val}"
-                )
-            if isinstance(val, bool):
-                raise NotImplementedError(
-                    f"Unsupported type: {type(val)} for value: {val}"
-                )
-        if operator == "$in":
-            return includes(field, filter_value)
-        else:
-            return excludes(field, filter_value)
-    else:
-        raise NotImplementedError(f"Operator {operator} not implemented")
-
-
 class FilterExpressionConverter(ABC):
     """
     Abstract base class defining the interface for converting filter expressions
@@ -546,7 +346,7 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
             )
 
     def convert_expression(self, filters: dict) -> str:
-        exp = _create_filter_clause(filters)
+        exp = _transform_to_expression(filters)
         if exp is None:
             return ""
         self._validate_expression(exp)
@@ -676,3 +476,203 @@ class BaseFilterExpressionConverter(FilterExpressionConverter):
         self, list_value: Value, context: StringBuilder
     ) -> None:
         context.append(",")
+
+
+def _transform_to_expression(filters: Union[None, dict] = None) -> Expression | None:
+    """Create an Expression from a dictionary filter.
+
+    Args:
+        filters: Dictionary of filters
+
+    Returns:
+        Expression object representing the filter clause, or None if no filters
+
+    Raises:
+        ValueError: If filter specification is invalid
+    """
+    if filters is None:
+        return None
+
+    if isinstance(filters, dict):
+        if len(filters) == 1:
+            # Check for top-level operators ($AND, $OR, $NOT)
+            key, value = list(filters.items())[0]
+            if key.startswith("$"):
+                # Validate operator
+                if key.lower() not in GROUP_OPERATORS.keys():
+                    raise ValueError(
+                        f"Invalid filter condition. Expected $and, $or or $not "
+                        f"but got: {key}"
+                    )
+            else:
+                # Single field filter
+                return _handle_field_filter(key, filters[key])
+
+            # Handle logical operators
+            if key.lower() == "$and" or key.lower() == "$or":
+                if not isinstance(value, list) or len(value) < 2:
+                    raise ValueError(
+                        f"Expected a list of at least 2 elements for $and/$or, "
+                        f"but got: {value}"
+                    )
+                    # Build AND chain
+                val0 = _ensureValue(_transform_to_expression(value[0]))
+                exp = _ensureValue(_transform_to_expression(value[1]))
+
+                _len = len(value)
+                while _len > 2:
+                    v1 = _transform_to_expression(value[_len - 1])
+                    v2 = _transform_to_expression(value[_len - 2])
+                    if v1 is None:
+                        if v2 is not None:
+                            exp = v2
+                    else:
+                        if v2 is None:
+                            exp = v1
+                        else:
+                            if key.lower() == "$and":
+                                exp = both(
+                                    _ensureValue(
+                                        _transform_to_expression(value[_len - 1])
+                                    ),
+                                    _ensureValue(
+                                        _transform_to_expression(value[_len - 2])
+                                    ),
+                                )
+                            else:
+                                exp = either(
+                                    _ensureValue(
+                                        _transform_to_expression(value[_len - 1])
+                                    ),
+                                    _ensureValue(
+                                        _transform_to_expression(value[_len - 2])
+                                    ),
+                                )
+                    _len = _len - 1
+                if key.lower() == "$and":
+                    return both(val0, exp)
+                else:
+                    return either(val0, exp)
+
+            else:  # key.lower() == "$not":
+                # Handle NOT operator
+                if isinstance(value, Expression):
+                    return negate(value)
+                if isinstance(value, dict):
+                    return negate(_ensureValue(_transform_to_expression(value)))
+                if isinstance(value, list) and len(value) == 1:
+                    value = value[0]
+                    if isinstance(value, dict):
+                        return negate(_ensureValue(_transform_to_expression(value)))
+
+                raise ValueError(
+                    f"Invalid filter condition for $not. Expected Expression, dict, "
+                    f"or list with single item, but got: {type(value)}"
+                )
+
+        elif len(filters) > 1:
+            # Multiple field filters - combine with AND
+            for key in filters:
+                if key.startswith("$"):
+                    raise ValueError(
+                        f"Invalid filter condition. Expected a field but got: {key}"
+                    )
+            expressions = [_handle_field_filter(k, v) for k, v in filters.items()]
+            if len(expressions) > 1:
+                return both(expressions[0], expressions[1])
+            elif expressions:
+                return expressions[0]
+            else:
+                raise ValueError("No valid expressions in filter")
+        else:
+            raise ValueError("Got an empty dictionary for filters")
+    else:
+        raise ValueError(
+            f"Invalid filter type: Expected dict or Expression but got {type(filters)}"
+        )
+
+
+def _ensureValue(val: Expression | None) -> Expression:
+    if val is None:
+        raise ValueError("Invalid filter value: Expected Expression, but got None")
+    return val
+
+    # Filter methods
+
+
+def _handle_field_filter(
+    field: str,
+    value: Any,
+) -> Expression:
+    """Create a filter for a specific field.
+
+    Args:
+        field: Name of field to filter on
+        value: Value to filter by. Can be:
+            - Direct value for equality filter
+            - Dict with operator and value for other filters
+
+    Returns:
+        Filter expression
+
+    Raises:
+        ValueError: If field name or filter specification is invalid
+    """
+    if not isinstance(field, str):
+        raise ValueError(
+            f"Field should be a string but got: {type(field)} with value: {field}"
+        )
+
+    if field.startswith("$"):
+        raise ValueError(
+            f"Invalid filter condition. Expected a field but got an operator: {field}"
+        )
+
+    # Allow [a-zA-Z0-9_] only
+    if not field.isidentifier():
+        raise ValueError(f"Invalid field name: {field}. Expected a valid identifier.")
+
+    if isinstance(value, dict):
+        if len(value) != 1:
+            raise ValueError(
+                "Invalid filter condition. Expected a dictionary with a single key "
+                f"that corresponds to an operator but got {len(value)} keys. "
+                f"The first few keys are: {list(value.keys())[:3]}"
+            )
+        operator, filter_value = list(value.items())[0]
+
+        # Verify operator is valid
+        if operator not in SUPPORTED_OPERATORS:
+            raise ValueError(
+                f"Invalid operator: {operator}. Expected one of {SUPPORTED_OPERATORS}"
+            )
+    else:
+        # Default to equality filter
+        operator = "$eq"
+        filter_value = value
+
+    if operator in STANDARD_SIMPLE_OPERATOR:
+        return STANDARD_SIMPLE_OPERATOR[operator](field, filter_value)
+    elif operator in STANDARD_STRING_ONLY_OPERATOR:
+        for val in filter_value:
+            if not isinstance(val, str):
+                raise NotImplementedError(
+                    f"Unsupported type: {type(val)} for value: {val}"
+                )
+        return STANDARD_STRING_ONLY_OPERATOR[operator](field, filter_value)
+    elif operator in STANDARD_LIST_OPERATOR:
+        for val in filter_value:
+            if not isinstance(val, (str, int, float)):
+                raise NotImplementedError(
+                    f"Unsupported type: {type(val)} for value: {val}"
+                )
+            if isinstance(val, bool):
+                raise NotImplementedError(
+                    f"Unsupported type: {type(val)} for value: {val}"
+                )
+        if operator == "$in":
+            return includes(field, filter_value)
+        else:
+            return excludes(field, filter_value)
+    else:
+        raise NotImplementedError(f"Operator {operator} not implemented")

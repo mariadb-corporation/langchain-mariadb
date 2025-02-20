@@ -11,9 +11,9 @@ from langchain_core.embeddings import Embeddings
 
 from langchain_mariadb.vectorstores import (
     MariaDBStore,
-    StoreConfig,
+    MariaDBStoreSettings,
 )
-from langchain_mariadb.expression_filter import _create_filter_clause
+from langchain_mariadb.expression_filter import _transform_to_expression
 from tests.unit_tests.fake_embeddings import FakeEmbeddings
 from tests.unit_tests.fixtures.filtering_test_cases import (
     DOCUMENTS,
@@ -60,7 +60,7 @@ def test_mariadbstore_with_pool() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             embedding_length=ADA_TOKEN_COUNT,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
@@ -80,7 +80,7 @@ def test_mariadbstore_with_url() -> None:
         embedding_length=ADA_TOKEN_COUNT,
         datasource=url_value,
         engine_args={"pool_size": 2},
-        config=StoreConfig(pre_delete_collection=True),
+        config=MariaDBStoreSettings(pre_delete_collection=True),
     )
     output = docsearch.similarity_search("foo", k=1)
     _compare_documents(output, [Document(page_content="foo")])
@@ -99,7 +99,7 @@ def test_mariadbstore_with_sqlalchemy() -> None:
         embedding=FakeEmbeddingsWithAdaDimension(),
         embedding_length=ADA_TOKEN_COUNT,
         datasource=sqlalchemy.create_engine(url_value),
-        config=StoreConfig(pre_delete_collection=True),
+        config=MariaDBStoreSettings(pre_delete_collection=True),
     )
     output = docsearch.similarity_search("foo", k=1)
     _compare_documents(output, [Document(page_content="foo")])
@@ -119,7 +119,7 @@ async def test_amariadbstore() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             embedding_length=ADA_TOKEN_COUNT,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = await docsearch.asimilarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
@@ -139,7 +139,7 @@ def test_mariadb_store_embeddings() -> None:
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
@@ -157,14 +157,14 @@ async def test_amariadb_store_embeddings() -> None:
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = await docsearch.asimilarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
 
 
 def test_mariadb_store_embeddings_config() -> None:
-    store_config = StoreConfig()
+    store_config = MariaDBStoreSettings()
     store_config.pre_delete_collection = True
     store_config.tables.embedding_table = "emb_table"
     store_config.tables.collection_table = "col_table"
@@ -178,7 +178,7 @@ def test_mariadb_store_embeddings_config() -> None:
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
@@ -186,7 +186,7 @@ def test_mariadb_store_embeddings_config() -> None:
 
 @pytest.mark.asyncio
 async def test_amariadb_store_embeddings_config() -> None:
-    store_config = StoreConfig()
+    store_config = MariaDBStoreSettings()
     store_config.pre_delete_collection = True
     store_config.tables.embedding_table = "emb_table"
     store_config.tables.collection_table = "col_table"
@@ -200,7 +200,7 @@ async def test_amariadb_store_embeddings_config() -> None:
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = await docsearch.asimilarity_search("foo", k=1)
         _compare_documents(output, [Document(page_content="foo")])
@@ -217,7 +217,7 @@ def test_mariadb_store_with_metadatas() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.similarity_search("foo", k=1)
         _compare_documents(
@@ -237,7 +237,7 @@ async def test_amariadb_store_with_metadatas() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = await docsearch.asimilarity_search("foo", k=1)
         _compare_documents(
@@ -256,7 +256,7 @@ def test_mariadb_store_with_metadatas_with_scores() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.similarity_search_with_score("foo", k=1)
         docs, scores = zip(*output)
@@ -276,7 +276,7 @@ async def test_amariadb_store_with_metadatas_with_scores() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = await docsearch.asimilarity_search_with_score("foo", k=1)
         docs, scores = zip(*output)
@@ -295,7 +295,7 @@ def test_mariadb_store_with_filter_match() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.similarity_search_with_score(
             "foo", k=1, filter={"page": "0"}
@@ -317,7 +317,7 @@ async def test_amariadb_store_with_filter_match() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = await docsearch.asimilarity_search_with_score(
             "foo", k=1, filter={"page": "0"}
@@ -338,7 +338,7 @@ def test_mariadb_store_with_filter_distant_match() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.similarity_search_with_score(
             "foo", k=1, filter={"page": "2"}
@@ -359,7 +359,7 @@ def test_mariadb_store_with_filter_no_match() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.similarity_search_with_score(
             "foo", k=1, filter={"page": "5"}
@@ -384,7 +384,7 @@ def test_mariadb_store_collection_with_metadata() -> None:
             collection_name="test_collection",
             collection_metadata={"foo": "bar"},
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
 
         with tmppool.get_connection() as con:
@@ -417,7 +417,7 @@ def test_mariadb_get_by_ids_format() -> None:
                 "20000000-0000-4000-0000-000000000000",
             ],
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         ids = vectorstore.add_documents(documents, ids=["1", "2"])
 
@@ -466,7 +466,7 @@ async def test_amariadb_get_by_ids_format() -> None:
                 "20000000-0000-4000-0000-000000000000",
             ],
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         ids = await vectorstore.aadd_documents(documents, ids=["1", "2"])
 
@@ -511,7 +511,7 @@ def test_mariadb_store_delete_docs() -> None:
                 "20000000-0000-4000-0000-000000000000",
             ],
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         vectorstore.delete(
             [
@@ -556,7 +556,7 @@ async def test_amariadb_store_delete_docs() -> None:
                 "20000000-0000-4000-0000-000000000000",
             ],
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         await vectorstore.adelete(
             [
@@ -600,7 +600,7 @@ def test_mariadb_store_delete_collection() -> None:
                 "20000000-0000-4000-0000-000000000000",
             ],
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         vectorstore.delete(collection_only=True)
 
@@ -642,7 +642,7 @@ def test_mariadb_store_index_documents() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             ids=ids,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         with tmppool.get_connection() as con:
             with con.cursor() as cursor:
@@ -732,7 +732,7 @@ async def test_amariadb_store_index_documents() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             ids=ids,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         with tmppool.get_connection() as con:
             with con.cursor() as cursor:
@@ -795,7 +795,7 @@ def test_mariadb_store_relevance_score() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
 
         output = docsearch.similarity_search_with_relevance_scores("foo", k=3)
@@ -823,7 +823,7 @@ async def test_amariadb_store_relevance_score() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
 
         output = await docsearch.asimilarity_search_with_relevance_scores("foo", k=3)
@@ -850,7 +850,7 @@ def test_mariadb_store_retriever_search_threshold() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
 
         retriever = docsearch.as_retriever(
@@ -879,7 +879,7 @@ async def test_amariadb_store_retriever_search_threshold() -> None:
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
 
         retriever = docsearch.as_retriever(
@@ -907,7 +907,7 @@ def test_mariadb_store_retriever_search_threshold_custom_normalization_fn() -> N
             embedding=FakeEmbeddingsWithAdaDimension(),
             metadatas=metadatas,
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
             relevance_score_fn=lambda d: d * 0,
         )
 
@@ -928,7 +928,7 @@ def test_mariadb_store_max_marginal_relevance_search() -> None:
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.max_marginal_relevance_search("foo", k=1, fetch_k=3)
         _compare_documents(output, [Document(page_content="foo")])
@@ -944,7 +944,7 @@ async def test_amariadb_store_max_marginal_relevance_search() -> None:
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = await docsearch.amax_marginal_relevance_search("foo", k=1, fetch_k=3)
         _compare_documents(output, [Document(page_content="foo")])
@@ -959,7 +959,7 @@ def test_mariadb_store_max_marginal_relevance_search_with_score() -> None:
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = docsearch.max_marginal_relevance_search_with_score(
             "foo", k=1, fetch_k=3
@@ -979,7 +979,7 @@ async def test_amariadb_store_max_marginal_relevance_search_with_score() -> None
             collection_name="test_collection",
             embedding=FakeEmbeddingsWithAdaDimension(),
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
         )
         output = await docsearch.amax_marginal_relevance_search_with_score(
             "foo", k=1, fetch_k=3
@@ -1009,7 +1009,7 @@ def get_vectorstore(
             embedding=embedding or FakeEmbeddingsWithAdaDimension(),
             collection_name="test_collection",
             datasource=tmppool,
-            config=StoreConfig(pre_delete_collection=True),
+            config=MariaDBStoreSettings(pre_delete_collection=True),
             relevance_score_fn=lambda d: d * 0,
         )
         try:
@@ -1093,4 +1093,4 @@ def test_mariadb_store_with_with_metadata_filters_5(
 def test_invalid_filters(mariadb_store, invalid_filter: Any) -> None:
     """Verify that invalid filters raise an error."""
     with pytest.raises(ValueError):
-        _create_filter_clause(invalid_filter)
+        _transform_to_expression(invalid_filter)
