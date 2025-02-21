@@ -33,7 +33,7 @@ This code provides a MariaDB vectorstore implementation with the following featu
 You can run the following command to spin up a MariaDB container:
 
 ```shell
-docker run --name mariadb-container -e MARIADB_ROOT_PASSWORD=langchain -e MARIADB_DATABASE=langchain -p 3306:3306 -d mariadb:11.7-rc
+docker run --name mariadb-container -e MARIADB_ROOT_PASSWORD=langchain -e MARIADB_DATABASE=langchain -p 3306:3306 -d mariadb:11.7
 ```
 
 #### install c/c connector
