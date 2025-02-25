@@ -50,24 +50,15 @@ pip install --quiet -U langchain_openai mariadb langchain_mariadb
 from langchain_openai import OpenAIEmbeddings
 from langchain_mariadb import MariaDBStore
 from langchain_core.documents import Document
-import mariadb
 
-# Create a connection pool
-pool = mariadb.ConnectionPool(
-    pool_name="mypool",
-    pool_size=3,
-    host="127.0.0.1",
-    port=3306,
-    user="langchain",
-    password="langchain",
-    database="langchain"
-)
+# connection string
+url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/langchain"
 
 # Create a new vector store
 vectorstore = MariaDBStore(
     embeddings=OpenAIEmbeddings(),
     embedding_length=1536,
-    datasource=pool,
+    datasource=url,
     collection_name="my_docs"
 )
 ```
@@ -169,19 +160,13 @@ import uuid
 
 from langchain_core.messages import SystemMessage, AIMessage, HumanMessage
 from langchain_mariadb import MariaDBChatMessageHistory
-import mariadb
 
-# Establish a pool to the database
-pool = mariadb.ConnectionPool(
-    pool_name="chat_pool",
-    user="root",
-    host="127.0.0.1",
-    database="chatdb"
-)
+# connection string
+url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/chatdb"
 
 # Create the table schema (only needs to be done once)
 table_name = "chat_history"
-MariaDBChatMessageHistory.create_tables(pool, table_name)
+MariaDBChatMessageHistory.create_tables(url, table_name)
 
 # Initialize the chat history manager
 chat_history = MariaDBChatMessageHistory(

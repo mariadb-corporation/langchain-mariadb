@@ -2,22 +2,21 @@ import uuid
 
 import sqlalchemy
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from sqlalchemy import create_engine
 
 from langchain_mariadb.chat_message_histories import MariaDBChatMessageHistory
-from tests.utils import pool, url
+from tests.utils import url
 
 
 def test_sync_chat_history() -> None:
     table_name = "chat_history"
     session_id = str(uuid.UUID(int=123))
-    with pool() as tmppool:
-        MariaDBChatMessageHistory.drop_table(tmppool, table_name)
-        MariaDBChatMessageHistory.create_tables(tmppool, table_name)
+    tmppool = create_engine(url=url())
+    MariaDBChatMessageHistory.drop_table(tmppool, table_name)
+    MariaDBChatMessageHistory.create_tables(tmppool, table_name)
 
-        chat_history = MariaDBChatMessageHistory(
-            table_name, session_id, datasource=tmppool
-        )
-        run_test(chat_history)
+    chat_history = MariaDBChatMessageHistory(table_name, session_id, datasource=tmppool)
+    run_test(chat_history)
 
 
 def test_sync_chat_history_url() -> None:

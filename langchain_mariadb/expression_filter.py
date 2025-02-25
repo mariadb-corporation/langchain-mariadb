@@ -16,17 +16,26 @@ Example:
     >>> converter = SQLFilterExpressionConverter()  # Some converter
     >>> sql_where = converter.convert_expression(filter)
     >>> print(sql_where)
-    >>> # Output: (status = 'active' OR status = 'pending') AND age >= 18 AND country IN ['US','CA','UK']
+    >>> # Output:
+    >>> # (status = 'active' OR status = 'pending')
+    >>> # AND age >= 18 AND country IN ['US','CA','UK']
 """
-
-from enum import Enum, auto
-from typing import Union, List, Optional, Any
+import collections
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
+from enum import Enum, auto
+from typing import Any, List, Optional, Union
 
 # Type aliases
 ValueType = Union[
-    int, str, bool, float, Sequence[int], Sequence[str], Sequence[bool], Sequence[float]
+    int,
+    str,
+    bool,
+    float,
+    Sequence[int],
+    Sequence[str],
+    Sequence[bool],
+    Sequence[float],
 ]
 Operand = Union["Key", "Value", "Expression", "Group"]
 
@@ -81,7 +90,7 @@ class Value:
     """Represents a value in a filter expression"""
 
     def __init__(self, value: ValueType):
-        if not isinstance(value, (int, str, float, bool, Sequence)):
+        if not isinstance(value, (int, str, float, bool, collections.abc.Sequence)):
             raise TypeError(f"Unsupported value type: {type(value)}")
         self.value = value
 
@@ -90,7 +99,8 @@ class Expression:
     """
     Represents a boolean filter expression with a specific structure:
     - Consists of a left operand, an operator, and an optional right operand
-    - Enables construction of complex filtering logic using different types of comparisons
+    - Enables construction of complex filtering logic using different types of
+      comparisons
     """
 
     def __init__(self, type_: Operator, left: Operand, right: Optional[Operand] = None):
@@ -101,8 +111,10 @@ class Expression:
 
 class Group:
     """
-    Represents a grouped collection of filter expressions that should be evaluated together
-    - Enables creating complex, nested filtering logic with specific evaluation precedence
+    Represents a grouped collection of filter expressions that should be evaluated
+    together
+    - Enables creating complex, nested filtering logic with specific evaluation
+      precedence
     - Analogous to parentheses in mathematical or logical expressions
     """
 
@@ -230,6 +242,11 @@ STANDARD_LIST_OPERATOR = {
     "$nin": excludes,
 }
 
+STANDARD_BETWEEN_OPERATOR = {
+    "$like": like,
+    "$nlike": nlike,
+}
+
 STANDARD_STRING_ONLY_OPERATOR = {
     "$like": like,
     "$nlike": nlike,
@@ -242,6 +259,11 @@ SUPPORTED_OPERATORS = (
     .union(STANDARD_LIST_OPERATOR)
     .union(GROUP_OPERATORS)
     .union(STANDARD_STRING_ONLY_OPERATOR)
+    .union(
+        {
+            "$between": None,
+        }
+    )
 )
 
 
@@ -655,6 +677,10 @@ def _handle_field_filter(
 
     if operator in STANDARD_SIMPLE_OPERATOR:
         return STANDARD_SIMPLE_OPERATOR[operator](field, filter_value)
+    elif operator == "$between":
+        # Use AND with two comparisons
+        low, high = filter_value
+        return both(gte(field, low), lte(field, high))
     elif operator in STANDARD_STRING_ONLY_OPERATOR:
         for val in filter_value:
             if not isinstance(val, str):
@@ -678,3 +704,36 @@ def _handle_field_filter(
             return excludes(field, filter_value)
     else:
         raise NotImplementedError(f"Operator {operator} not implemented")
+
+
+class MariaDBFilterExpressionConverter(BaseFilterExpressionConverter):
+    """Converter for MariaDB filter expressions."""
+
+    def __init__(self, metadata_field_name: str):
+        super().__init__()
+        self.metadata_field_name = metadata_field_name
+
+    def convert_expression_to_context(
+        self, expression: Expression, context: StringBuilder
+    ) -> None:
+        super().convert_operand_to_context(expression.left, context)
+        super().convert_symbol_to_context(expression, context)
+        if expression.right:
+            super().convert_operand_to_context(expression.right, context)
+
+    def convert_key_to_context(self, key: Key, context: StringBuilder) -> None:
+        context.append(f"JSON_VALUE({self.metadata_field_name}, '$.{key.key}')")
+
+    def write_value_range_start(
+        self, _list_value: Value, context: StringBuilder
+    ) -> None:
+        context.append("(")
+
+    def write_value_range_end(self, _list_value: Value, context: StringBuilder) -> None:
+        context.append(")")
+
+    def write_group_start(self, _group: Group, context: StringBuilder) -> None:
+        context.append("(")
+
+    def write_group_end(self, _group: Group, context: StringBuilder) -> None:
+        context.append(")")
