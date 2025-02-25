@@ -7,14 +7,12 @@ from typing import Any, Dict, Generator, List, Sequence
 
 import pytest
 import sqlalchemy
-from langchain_community.vectorstores.mariadb import (
-    MariaDBStore,
-    MariaDBStoreSettings,
-)
+
 from langchain_core.documents import Document
 from langchain_core.embeddings.embeddings import Embeddings
 from sqlalchemy import Engine, create_engine
 
+from langchain_mariadb.vectorstores import MariaDBStoreSettings, MariaDBStore
 from tests.unit_tests.fake_embeddings import FakeEmbeddings
 from tests.unit_tests.fixtures.filtering_test_cases import (
     DOCUMENTS,
