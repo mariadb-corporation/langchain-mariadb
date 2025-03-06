@@ -3,11 +3,8 @@
 [![CI](https://github.com/rusher/langchain-mariadb/actions/workflows/ci.yml/badge.svg)](https://github.com/rusher/langchain-mariadb/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-The `langchain-mariadb` package provides implementations of core LangChain abstractions using MariaDB's vector capabilities.
-
-The package is released under the MIT license.
-
-Feel free to use the abstractions as provided or modify/extend them as appropriate for your own application.
+This package provides LangChain integrations with MariaDB's vector capabilities, released under the MIT license. 
+Users can use the implementations as provided or customize them for their specific applications.
 
 ## Installation
 
@@ -17,35 +14,43 @@ pip install -U langchain-mariadb
 
 ## Vector store
 
-This is an implementation of a LangChain vectorstore using `mariadb` as the backend.
-MariaDB requires version 11.7.1 or later for vector support.
+The package implements a LangChain vectorstore using MariaDB (version 11.7.1+ required) as the backend. Features include:
 
-This code provides a MariaDB vectorstore implementation with the following features:
+* Native vector similarity search
+* Support for cosine and euclidean distance metrics
+* Comprehensive metadata filtering
+* Connection pooling for performance optimization
+* Customizable table and column configurations
 
-* Uses MariaDB's native vector similarity search capabilities
-* Supports both cosine and euclidean distance metrics
-* Provides comprehensive metadata filtering
-* Uses connection pooling for better performance
-* Supports custom table and column configurations
+### Setup
 
-### Installation
-
-You can run the following command to spin up a MariaDB container:
+You can start a MariaDB container with:
 
 ```shell
 docker run --name mariadb-container -e MARIADB_ROOT_PASSWORD=langchain -e MARIADB_DATABASE=langchain -p 3306:3306 -d mariadb:11.7
 ```
 
-#### install c/c connector
+The package uses SQLAlchemy but has only been tested with the MariaDB connector, which is strongly recommended. 
+Since the Python mariadb connector relies on C/C components, you'll need to install them first:
+
 ```shell
-# on ubuntu
+# Debian, Ubuntu
 sudo apt install libmariadb3 libmariadb-dev
-# on CentOS, RHEL, Rocky Linux
+
+# CentOS, RHEL, Rocky Linux
 sudo yum install MariaDB-shared MariaDB-devel
-# python  
-pip install --quiet -U langchain_openai mariadb langchain_mariadb
+
+# Then install the Python connector
+pip install --quiet -U mariadb
 ```
+
 #### Initialize the vectorstore
+
+Installing `langchain_mariadb` along with an LLM model, here using `langchain_openai` as example. 
+```shell
+pip install --quiet -U langchain_openai langchain_mariadb
+```
+
 ```python
 from langchain_openai import OpenAIEmbeddings
 from langchain_mariadb import MariaDBStore
