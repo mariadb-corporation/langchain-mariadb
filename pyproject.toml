@@ -1,16 +1,16 @@
 [project]
 name = "langchain-mariadb"
-version = "0.0.10"
+version = "0.0.11"
 description = "An integration package connecting MariaDB and LangChain"
 readme = "README.md"
 authors = []
-repository = "https://github.com/langchain-ai/langchain-mariadb"
+repository = "https://github.com/mariadb-corporation/langchain-mariadb"
 license = "MIT"
 requires-python = ">=3.9,<4.0"
 dynamic = [ "dependencies" ]
 
 [project.urls]
-"Source Code" = "https://github.com/langchain-ai/langchain-mariadb/tree/master/langchain_mariadb"
+"Source Code" = "https://github.com/mariadb-corporation/langchain-mariadb"
 
 [tool.poetry.dependencies]
 langchain-core = ">=0.2.13,<0.4.0"
