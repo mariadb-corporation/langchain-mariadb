@@ -22,6 +22,8 @@ Launch a MariaDB Docker container with:
 docker run --name mariadb-container -e MARIADB_ROOT_PASSWORD=langchain -e MARIADB_DATABASE=langchain -p 3306:3306 -d mariadb:11.7
 ```
 
+### Installing the Package
+
 The package uses SQLAlchemy but works best with the MariaDB connector, which requires C/C++ components:
 ```shell
 # Debian, Ubuntu
@@ -34,7 +36,7 @@ sudo yum install MariaDB-shared MariaDB-devel
 pip install --quiet -U mariadb
 ```
 
-### Installing the Package
+Then install `langchain_mariadb` package
 ```bash
 pip install -U langchain-mariadb
 ```
