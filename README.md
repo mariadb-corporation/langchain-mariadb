@@ -36,14 +36,14 @@ sudo yum install MariaDB-shared MariaDB-devel
 pip install --quiet -U mariadb
 ```
 
-Then install `langchain_mariadb` package
+Then install `langchain-mariadb` package
 ```bash
 pip install -U langchain-mariadb
 ```
 
-`langchain_mariadb` works along with an LLM model, here using `langchain_openai` as example. 
+VectorStore works along with an LLM model, here using `langchain-openai` as example. 
 ```shell
-pip install langchain_mariadb
+pip install langchain-openai
 ```
 
 #### Creating a Vector Store
