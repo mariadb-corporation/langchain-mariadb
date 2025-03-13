@@ -1462,7 +1462,7 @@ version = "1.1.11"
 description = "Python MariaDB extension"
 optional = false
 python-versions = ">=3.8"
-groups = ["main"]
+groups = ["dev"]
 files = [
     {file = "mariadb-1.1.11-cp310-cp310-win32.whl", hash = "sha256:dbc4cf0e302ca82d46f9431a0b04f048e9c21ee56d6f3162c29605f84d63b40c"},
     {file = "mariadb-1.1.11-cp310-cp310-win_amd64.whl", hash = "sha256:579420293fa790d5ae0a6cb4bdb7e8be8facc2ceefb6123c2b0e8042b3fa725d"},
@@ -3508,4 +3508,4 @@ type = ["pytest-mypy"]
 [metadata]
 lock-version = "2.1"
 python-versions = ">=3.9,<4.0"
-content-hash = "002cbcf3f6db01ef1f3f4658559f7118254fbc396b63533faccecde6248b1c67"
+content-hash = "70dc9b8523494b0b0cd06f6ab6f6edb609a06c311447188389827de3b058ce04"

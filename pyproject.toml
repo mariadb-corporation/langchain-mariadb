@@ -14,7 +14,6 @@ dynamic = [ "dependencies" ]
 
 [tool.poetry.dependencies]
 langchain-core = ">=0.2.13,<0.4.0"
-mariadb = "^1.1.11"
 sqlalchemy = "^2"
 
 [tool.poetry.group.docs.dependencies]
@@ -24,7 +23,7 @@ optional = true
 
 [tool.poetry.group.dev.dependencies]
 jupyterlab = "^3.6.1"
-
+mariadb = "^1.1.11"
 
 [tool.poetry.group.test]
 optional = true
