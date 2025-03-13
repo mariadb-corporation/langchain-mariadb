@@ -44,6 +44,7 @@ pip install -U langchain-mariadb
 VectorStore works along with an LLM model, here using `langchain-openai` as example. 
 ```shell
 pip install langchain-openai
+export OPENAI_API_KEY=...
 ```
 
 #### Creating a Vector Store
