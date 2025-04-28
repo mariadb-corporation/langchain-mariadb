@@ -19,14 +19,12 @@ from typing import (
     cast,
 )
 
-import mariadb
 import numpy as np
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.runnables.config import run_in_executor
 from langchain_core.vectorstores import VectorStore
 from langchain_core.vectorstores.utils import maximal_marginal_relevance
-from mariadb.constants import ERR as mariadb_err
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
@@ -638,9 +636,11 @@ class MariaDBStore(VectorStore):
                 data,
             )
             con.commit()
-        except mariadb.Error as e:
-            if e.errno == mariadb_err.ER_NO_SUCH_TABLE:
-                return   
+        except Exception as e:
+            if hasattr(e, "errno") and e.errno == 1146: # NO SUCH TABLE
+                return
+            else:
+                raise e
         finally:
             cursor.close()
             con.close()
