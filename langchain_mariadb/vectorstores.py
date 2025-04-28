@@ -392,9 +392,9 @@ class MariaDBStore(VectorStore):
         if not self.lazy_init:
             if self._embedding_length is None:
                 self._embedding_length = 1536
-            self.__post_init__()
+            self._init_vectorstore()
 
-    def __post_init__(
+    def _init_vectorstore(
         self,
     ) -> None:
         """Initialize the store."""
@@ -796,7 +796,7 @@ class MariaDBStore(VectorStore):
         embeddings = self.embedding_function.embed_documents(texts_)
         if self.lazy_init and embeddings:
             self._embedding_length = len(embeddings[0])
-            self.__post_init__()
+            self._init_vectorstore()
         return self.add_embeddings(
             texts=texts_,
             embeddings=list(embeddings),
@@ -1305,7 +1305,7 @@ class MariaDBStore(VectorStore):
 
         if self.lazy_init and not self._embedding_length:
             self._embedding_length = len(embedding)
-            self.__post_init__()
+            self._init_vectorstore()
 
         return self.__inner_query_collection(embedding=embedding, k=k, query_=query)
 
