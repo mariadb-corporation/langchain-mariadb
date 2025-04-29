@@ -47,6 +47,22 @@ def pool() -> Generator[Engine, None, None]:
 ADA_TOKEN_COUNT = 1536
 
 
+def _count_no_of_tables(engine: Engine) -> int:
+    """Count the number of tables in the database."""
+    connection = engine.raw_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'langchain' and table_name like 'langchain_%'"
+    )
+    result = cursor.fetchone()
+    if result is not None:
+        count = int(result[0])
+    else:
+        count = 0
+    cursor.close()
+    return count
+
+
 def _compare_documents(left: Sequence[Document], right: Sequence[Document]) -> None:
     """Compare lists of documents, irrespective of IDs."""
     assert len(left) == len(right)
@@ -1104,3 +1120,134 @@ def test_mariadb_store_with_with_metadata_filters_5(
     with get_vectorstore() as store:
         docs = store.similarity_search("meow", k=5, filter=test_filter)
         assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
+
+
+def test_mariadb_lazy_store_with_metadatas() -> None:
+    """Test end to end construction and search using lazy initialisation."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        store = MariaDBStore(
+            embeddings=FakeEmbeddingsWithAdaDimension(),
+            collection_name="test_collection",
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True, lazy_init=True),
+        )
+        store.add_texts(
+            texts=texts,
+            metadatas=metadatas,
+        )
+        output = store.similarity_search("foo", k=1)
+        _compare_documents(
+            output, [Document(page_content="foo", metadata={"page": "0"})]
+        )
+
+
+def test_mariadb_lazy_check_tables_init_after_search() -> None:
+    """Test tables exist after search with lazy initialisation."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        store = MariaDBStore(
+            embeddings=FakeEmbeddingsWithAdaDimension(),
+            collection_name="test_collection",
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True, lazy_init=True),
+        )
+        assert _count_no_of_tables(tmppool) == 0
+        store.similarity_search("foo", k=1)
+        assert _count_no_of_tables(tmppool) == 2
+
+
+@pytest.mark.asyncio
+async def test_mariadb_lazy_check_tables_init_after_async_search() -> None:
+    """Test tables exist after async search with lazy initialisation."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        store = MariaDBStore(
+            embeddings=FakeEmbeddingsWithAdaDimension(),
+            collection_name="test_collection",
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True, lazy_init=True),
+        )
+        assert _count_no_of_tables(tmppool) == 0
+        await store.asimilarity_search("foo", k=1)
+        assert _count_no_of_tables(tmppool) == 2
+
+
+def test_mariadb_lazy_tables_exist_after_addtexts() -> None:
+    """Test adding texts with lazy initialisation."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        store = MariaDBStore(
+            embeddings=FakeEmbeddingsWithAdaDimension(),
+            collection_name="test_collection",
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True, lazy_init=True),
+        )
+        assert _count_no_of_tables(tmppool) == 0
+        store.add_texts(
+            texts=texts,
+            metadatas=metadatas,
+        )
+        assert _count_no_of_tables(tmppool) == 2
+
+
+def test_mariadbstore_lazy_from_texts() -> None:
+    """Test end to end construction and search with lazy initialisation."""
+    texts = ["foo", "bar", "baz"]
+    with pool() as tmppool:
+        docsearch = MariaDBStore.from_texts(
+            texts=texts,
+            collection_name="test_collection",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            embedding_length=ADA_TOKEN_COUNT,
+            datasource=tmppool,
+            engine_args={"pool_size": 2},
+            config=MariaDBStoreSettings(pre_delete_collection=True, lazy_init=True),
+        )
+        output = docsearch.similarity_search("foo", k=1)
+        _compare_documents(output, [Document(page_content="foo")])
+
+        output = docsearch.search("foo", "similarity", k=1)
+        _compare_documents(output, [Document(page_content="foo")])
+
+
+def test_mariadb_store_lazy_delete_docs() -> None:
+    """Test delete docs with lazy initialisation"""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        store = MariaDBStore(
+            embeddings=FakeEmbeddingsWithAdaDimension(),
+            collection_name="test_collection_filter",
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True, lazy_init=True),
+        )
+
+        assert _count_no_of_tables(tmppool) == 0
+        store.delete(
+            [
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+            ]
+        )
+        assert _count_no_of_tables(tmppool) == 0
+
+
+def test_mariadb_store_lazy_delete_collection() -> None:
+    """Test delete collection with lazy initialisation."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        store = MariaDBStore(
+            embeddings=FakeEmbeddingsWithAdaDimension(),
+            collection_name="test_collection",
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True, lazy_init=True),
+        )
+        assert _count_no_of_tables(tmppool) == 0
+        store.delete_collection()
+        assert _count_no_of_tables(tmppool) == 0

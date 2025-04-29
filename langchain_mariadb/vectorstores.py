@@ -283,12 +283,14 @@ class MariaDBStoreSettings:
     tables: TableConfig
     columns: ColumnConfig
     pre_delete_collection: bool
+    lazy_init: bool
 
     def __init__(
         self,
         tables: Optional[TableConfig] = None,
         columns: Optional[ColumnConfig] = None,
         pre_delete_collection: bool = False,
+        lazy_init: bool = False,
     ) -> None:
         """Initialize MariaDBStoreSettings with custom or default configurations.
 
@@ -300,6 +302,7 @@ class MariaDBStoreSettings:
         self.tables = tables or TableConfig.default()
         self.columns = columns or ColumnConfig.default()
         self.pre_delete_collection = pre_delete_collection
+        self.lazy_init = lazy_init
 
     @classmethod
     def default(cls) -> "MariaDBStoreSettings":
@@ -319,7 +322,7 @@ class MariaDBStore(VectorStore):
     def __init__(
         self,
         embeddings: Embeddings,
-        embedding_length: Optional[int] = 1536,
+        embedding_length: Optional[int] = None,
         *,
         datasource: Union[Engine | str],
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
@@ -351,6 +354,7 @@ class MariaDBStore(VectorStore):
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
         self.pre_delete_collection = config.pre_delete_collection
+        self.lazy_init = config.lazy_init
         self.logger = logger or logging.getLogger(__name__)
         self.override_relevance_score_fn = relevance_score_fn
         if isinstance(datasource, str):
@@ -383,14 +387,18 @@ class MariaDBStore(VectorStore):
         )
 
         # Initialize tables and collection
-        self.__post_init__()
+        if not self.lazy_init:
+            if self._embedding_length is None:
+                self._embedding_length = 1536
+            self._init_vectorstore()
 
-    def __post_init__(
+    def _init_vectorstore(
         self,
     ) -> None:
         """Initialize the store."""
         self.create_tables_if_not_exists()
         self.create_collection()
+        self.lazy_init = False
 
     # Core properties and utilities
     @property
@@ -517,6 +525,25 @@ class MariaDBStore(VectorStore):
             cursor.close()
             con.close()
 
+    def _check_if_collection_exists(self) -> str | None:
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
+        try:
+            cursor.execute(
+                f"SELECT {self._collection_id_col_name}"
+                f" FROM {self._collection_table_name}"
+                f" WHERE {self._collection_label_col_name}=?",
+                (self.collection_name,),
+            )
+            row = cursor.fetchone()
+            if row is not None:
+                return row[0]
+            return None
+
+        finally:
+            cursor.close()
+            con.close()
+
     def create_collection(self) -> None:
         """Create a new collection or retrieve existing one."""
         if self.pre_delete_collection:
@@ -526,18 +553,10 @@ class MariaDBStore(VectorStore):
         cursor = con.cursor()
         try:
             # Check if collection exists
-            cursor.execute(
-                f"SELECT {self._collection_id_col_name}"
-                f" FROM {self._collection_table_name}"
-                f" WHERE {self._collection_label_col_name}=?",
-                (self.collection_name,),
-            )
-            row = cursor.fetchone()
-
-            if row is not None:
-                self._collection_id = row[0]
+            collection_id = self._check_if_collection_exists()
+            if collection_id is not None:
+                self._collection_id = collection_id
                 return
-
             # Create new collection
             query = (
                 f"INSERT INTO {self._collection_table_name}"
@@ -618,6 +637,11 @@ class MariaDBStore(VectorStore):
                 data,
             )
             con.commit()
+        except Exception as e:
+            if hasattr(e, "errno") and e.errno == 1146:  # NO SUCH TABLE
+                return
+            else:
+                raise e
         finally:
             cursor.close()
             con.close()
@@ -706,6 +730,9 @@ class MariaDBStore(VectorStore):
         if not metadatas:
             metadatas = [{} for _ in texts]
 
+        if len(embeddings) == 0:
+            return []
+
         # Insert embeddings into database
         con = self._datasource.raw_connection()
         cursor = con.cursor()
@@ -768,7 +795,14 @@ class MariaDBStore(VectorStore):
             List of ids from adding the texts into the vectorstore.
         """
         texts_ = list(texts)
+        if not texts_:
+            return []
         embeddings = self.embedding_function.embed_documents(texts_)
+        if len(embeddings) == 0:
+            return []
+        if self.lazy_init and embeddings:
+            self._embedding_length = len(embeddings[0])
+            self._init_vectorstore()
         return self.add_embeddings(
             texts=texts_,
             embeddings=list(embeddings),
@@ -1275,6 +1309,10 @@ class MariaDBStore(VectorStore):
             f"ORDER BY distance ASC LIMIT ?"
         )
 
+        if self.lazy_init and not self._embedding_length:
+            self._embedding_length = len(embedding)
+            self._init_vectorstore()
+
         return self.__inner_query_collection(embedding=embedding, k=k, query_=query)
 
     def __query_with_score_collection(
@@ -1412,9 +1450,10 @@ class MariaDBStore(VectorStore):
 
         # Determine embedding length if not specified
         emb_len = embedding_length
-        if embedding_length is None and embeddings:
+        if embedding_length is None and embeddings and len(embeddings) > 0:
             emb_len = len(embeddings[0])
 
+        config.lazy_init = False
         # Create store instance
         store = cls(
             embedding,
@@ -1601,8 +1640,3 @@ class MariaDBStore(VectorStore):
             metadatas=metadatas,
             **kwargs,
         )
-
-
-# ------------------------------------------------------------------------------
-# Filter to sql converter Classes
-# ------------------------------------------------------------------------------
