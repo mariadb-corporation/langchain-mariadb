@@ -5,7 +5,6 @@ import json
 from contextlib import contextmanager
 from typing import Any, Dict, Generator, List, Sequence
 
-import mariadb
 import pytest
 import sqlalchemy
 
@@ -47,14 +46,22 @@ def pool() -> Generator[Engine, None, None]:
 
 ADA_TOKEN_COUNT = 1536
 
+
 def _count_no_of_tables(engine: Engine) -> int:
     """Count the number of tables in the database."""
     connection = engine.raw_connection()
     cursor = connection.cursor()
-    cursor.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'langchain' and table_name like 'langchain_%'")
-    count = int(cursor.fetchone()[0])
+    cursor.execute(
+        "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = 'langchain' and table_name like 'langchain_%'"
+    )
+    result = cursor.fetchone()
+    if result is not None:
+        count = int(result[0])
+    else:
+        count = 0
     cursor.close()
     return count
+
 
 def _compare_documents(left: Sequence[Document], right: Sequence[Document]) -> None:
     """Compare lists of documents, irrespective of IDs."""
@@ -1114,6 +1121,7 @@ def test_mariadb_store_with_with_metadata_filters_5(
         docs = store.similarity_search("meow", k=5, filter=test_filter)
         assert [doc.metadata["id"] for doc in docs] == expected_ids, test_filter
 
+
 def test_mariadb_lazy_store_with_metadatas() -> None:
     """Test end to end construction and search using lazy initialisation."""
     texts = ["foo", "bar", "baz"]
@@ -1134,6 +1142,7 @@ def test_mariadb_lazy_store_with_metadatas() -> None:
             output, [Document(page_content="foo", metadata={"page": "0"})]
         )
 
+
 def test_mariadb_lazy_check_tables_init_after_search() -> None:
     """Test tables exist after search with lazy initialisation."""
     texts = ["foo", "bar", "baz"]
@@ -1148,6 +1157,7 @@ def test_mariadb_lazy_check_tables_init_after_search() -> None:
         assert _count_no_of_tables(tmppool) == 0
         store.similarity_search("foo", k=1)
         assert _count_no_of_tables(tmppool) == 2
+
 
 @pytest.mark.asyncio
 async def test_mariadb_lazy_check_tables_init_after_async_search() -> None:
@@ -1164,6 +1174,7 @@ async def test_mariadb_lazy_check_tables_init_after_async_search() -> None:
         assert _count_no_of_tables(tmppool) == 0
         await store.asimilarity_search("foo", k=1)
         assert _count_no_of_tables(tmppool) == 2
+
 
 def test_mariadb_lazy_tables_exist_after_addtexts() -> None:
     """Test adding texts with lazy initialisation."""
@@ -1183,6 +1194,7 @@ def test_mariadb_lazy_tables_exist_after_addtexts() -> None:
         )
         assert _count_no_of_tables(tmppool) == 2
 
+
 def test_mariadbstore_lazy_from_texts() -> None:
     """Test end to end construction and search with lazy initialisation."""
     texts = ["foo", "bar", "baz"]
@@ -1201,6 +1213,7 @@ def test_mariadbstore_lazy_from_texts() -> None:
 
         output = docsearch.search("foo", "similarity", k=1)
         _compare_documents(output, [Document(page_content="foo")])
+
 
 def test_mariadb_store_lazy_delete_docs() -> None:
     """Test delete docs with lazy initialisation"""
@@ -1223,12 +1236,12 @@ def test_mariadb_store_lazy_delete_docs() -> None:
         )
         assert _count_no_of_tables(tmppool) == 0
 
+
 def test_mariadb_store_lazy_delete_collection() -> None:
     """Test delete collection with lazy initialisation."""
     texts = ["foo", "bar", "baz"]
     metadatas = [{"page": str(i)} for i in range(len(texts))]
     with pool() as tmppool:
-
         store = MariaDBStore(
             embeddings=FakeEmbeddingsWithAdaDimension(),
             collection_name="test_collection",

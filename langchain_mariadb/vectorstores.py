@@ -283,7 +283,7 @@ class MariaDBStoreSettings:
     tables: TableConfig
     columns: ColumnConfig
     pre_delete_collection: bool
-    lazy_init: bool = False
+    lazy_init: bool
 
     def __init__(
         self,
@@ -398,6 +398,7 @@ class MariaDBStore(VectorStore):
         """Initialize the store."""
         self.create_tables_if_not_exists()
         self.create_collection()
+        self.lazy_init = False
 
     # Core properties and utilities
     @property
@@ -524,7 +525,7 @@ class MariaDBStore(VectorStore):
             cursor.close()
             con.close()
 
-    def _check_if_collection_exists(self) -> str:
+    def _check_if_collection_exists(self) -> str | None:
         con = self._datasource.raw_connection()
         cursor = con.cursor()
         try:
@@ -537,7 +538,7 @@ class MariaDBStore(VectorStore):
             row = cursor.fetchone()
             if row is not None:
                 return row[0]
-            return False
+            return None
 
         finally:
             cursor.close()
@@ -553,7 +554,7 @@ class MariaDBStore(VectorStore):
         try:
             # Check if collection exists
             collection_id = self._check_if_collection_exists()
-            if collection_id != False:
+            if collection_id is not None:
                 self._collection_id = collection_id
                 return
             # Create new collection
@@ -637,7 +638,7 @@ class MariaDBStore(VectorStore):
             )
             con.commit()
         except Exception as e:
-            if hasattr(e, "errno") and e.errno == 1146: # NO SUCH TABLE
+            if hasattr(e, "errno") and e.errno == 1146:  # NO SUCH TABLE
                 return
             else:
                 raise e
@@ -729,6 +730,9 @@ class MariaDBStore(VectorStore):
         if not metadatas:
             metadatas = [{} for _ in texts]
 
+        if len(embeddings) == 0:
+            return []
+
         # Insert embeddings into database
         con = self._datasource.raw_connection()
         cursor = con.cursor()
@@ -794,6 +798,8 @@ class MariaDBStore(VectorStore):
         if not texts_:
             return []
         embeddings = self.embedding_function.embed_documents(texts_)
+        if len(embeddings) == 0:
+            return []
         if self.lazy_init and embeddings:
             self._embedding_length = len(embeddings[0])
             self._init_vectorstore()
@@ -1444,7 +1450,7 @@ class MariaDBStore(VectorStore):
 
         # Determine embedding length if not specified
         emb_len = embedding_length
-        if embedding_length is None and embeddings:
+        if embedding_length is None and embeddings and len(embeddings) > 0:
             emb_len = len(embeddings[0])
 
         config.lazy_init = False
@@ -1634,8 +1640,3 @@ class MariaDBStore(VectorStore):
             metadatas=metadatas,
             **kwargs,
         )
-
-
-# ------------------------------------------------------------------------------
-# Filter to sql converter Classes
-# ------------------------------------------------------------------------------
