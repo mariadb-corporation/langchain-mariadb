@@ -735,9 +735,7 @@ class MariaDBStore(VectorStore):
 
         # Prepare data for insertion
         data = []
-        for text, metadata, embedding, id_ in zip(
-            texts, metadatas, embeddings, ids_
-        ):
+        for text, metadata, embedding, id_ in zip(texts, metadatas, embeddings, ids_):
             binary_emb = self._embedding_to_binary(embedding)
             data.append(
                 (
@@ -773,7 +771,7 @@ class MariaDBStore(VectorStore):
             # Process in batches of 1000 parameters
             batch_size = 1000
             for i in range(0, len(data), batch_size):
-                batch = data[i:i + batch_size]
+                batch = data[i : i + batch_size]
                 cursor.executemany(query, batch)
             con.commit()
 
