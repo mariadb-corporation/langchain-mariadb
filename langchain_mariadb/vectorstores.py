@@ -733,25 +733,26 @@ class MariaDBStore(VectorStore):
         if len(embeddings) == 0:
             return []
 
-        # Insert embeddings into database
+        # Prepare data for insertion
+        data = []
+        for text, metadata, embedding, id_ in zip(
+            texts, metadatas, embeddings, ids_
+        ):
+            binary_emb = self._embedding_to_binary(embedding)
+            data.append(
+                (
+                    id_,
+                    text,
+                    json.dumps(metadata),
+                    binary_emb,
+                    self._collection_id,
+                )
+            )
+
+        # Insert embeddings into database in batches
         con = self._datasource.raw_connection()
         cursor = con.cursor()
         try:
-            data = []
-            for text, metadata, embedding, id_ in zip(
-                texts, metadatas, embeddings, ids_
-            ):
-                binary_emb = self._embedding_to_binary(embedding)
-                data.append(
-                    (
-                        id_,
-                        text,
-                        json.dumps(metadata),
-                        binary_emb,
-                        self._collection_id,
-                    )
-                )
-
             query = (
                 f"INSERT INTO {self._embedding_table_name} ("
                 f"{self._embedding_id_col_name}, "
@@ -768,8 +769,14 @@ class MariaDBStore(VectorStore):
                 f"{self._embedding_emb_col_name} = "
                 f"VALUES({self._embedding_emb_col_name})"
             )
-            cursor.executemany(query, data)
+
+            # Process in batches of 1000 parameters
+            batch_size = 1000
+            for i in range(0, len(data), batch_size):
+                batch = data[i:i + batch_size]
+                cursor.executemany(query, batch)
             con.commit()
+
         finally:
             cursor.close()
             con.close()
