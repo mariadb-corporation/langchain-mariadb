@@ -145,6 +145,7 @@ The MariaDBStore can be configured with various options to customize its behavio
 | `logger` | Optional[logging.Logger] | None | Optional logger instance for debugging |
 | `relevance_score_fn` | Optional[Callable] | None | Optional function to override relevance score calculation |
 | `engine_args` | Optional[dict] | None | Additional arguments passed to SQLAlchemy engine creation |
+| `lazy_init` | bool | False | Whether to delay table creation until first use |
 
 ### Table and Column Configuration
 
