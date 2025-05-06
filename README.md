@@ -128,6 +128,87 @@ results = vectorstore.similarity_search('ducks', k=10, filter={
 })
 ```
 
+## Configuration Options
+
+The MariaDBStore can be configured with various options to customize its behavior. Here are all available options:
+
+### Basic Configuration
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `embeddings` | Embeddings | Required | The embeddings model to use for creating vector embeddings |
+| `embedding_length` | int | 1536 | Length of the embedding vectors |
+| `datasource` | Union[Engine, str] | Required | Database connection string or SQLAlchemy engine |
+| `collection_name` | str | "langchain" | Name of the collection to store vectors |
+| `collection_metadata` | Optional[dict] | None | Optional metadata for the collection |
+| `distance_strategy` | DistanceStrategy | COSINE | Strategy for computing distances (COSINE or EUCLIDEAN) |
+| `logger` | Optional[logging.Logger] | None | Optional logger instance for debugging |
+| `relevance_score_fn` | Optional[Callable] | None | Optional function to override relevance score calculation |
+| `engine_args` | Optional[dict] | None | Additional arguments passed to SQLAlchemy engine creation |
+
+### Table and Column Configuration
+
+You can customize table and column names using the `MariaDBStoreSettings` class:
+
+```python
+from langchain_mariadb import MariaDBStoreSettings, TableConfig, ColumnConfig
+
+config = MariaDBStoreSettings(
+    tables=TableConfig(
+        embedding_table="custom_embeddings",  # Default: "langchain_embedding"
+        collection_table="custom_collections"  # Default: "langchain_collection"
+    ),
+    columns=ColumnConfig(
+        # Embedding table columns
+        embedding_id="doc_id",        # Default: "id"
+        embedding="vector",           # Default: "embedding"
+        content="text_content",       # Default: "content"
+        metadata="doc_metadata",      # Default: "metadata"
+        
+        # Collection table columns
+        collection_id="coll_id",      # Default: "id"
+        collection_label="name",      # Default: "label"
+        collection_metadata="meta"    # Default: "metadata"
+    ),
+    pre_delete_collection=False       # Whether to delete existing collection
+)
+
+vectorstore = MariaDBStore(
+    embeddings=embeddings,
+    datasource=url,
+    config=config
+)
+```
+
+### Search Options
+
+When performing searches, you can use these additional parameters:
+
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| `k` | int | 4 | Number of results to return |
+| `fetch_k` | int | 20 | Number of documents to fetch before selecting top-k (for MMR search) |
+| `lambda_mult` | float | 0.5 | Balance between relevance and diversity for MMR search (0-1) |
+| `filter` | Optional[dict] | None | Optional metadata filter |
+| `score_threshold` | Optional[float] | None | Optional minimum score threshold for results |
+
+### Distance Strategies
+
+The vector store supports two distance strategies:
+
+- `DistanceStrategy.COSINE` (default): Uses cosine similarity
+- `DistanceStrategy.EUCLIDEAN`: Uses Euclidean distance
+
+```python
+from langchain_mariadb import DistanceStrategy
+
+vectorstore = MariaDBStore(
+    embeddings=embeddings,
+    datasource=url,
+    distance_strategy=DistanceStrategy.EUCLIDEAN
+)
+```
+
 ## Chat Message History
 
 The package also provides a way to store chat message history in MariaDB:
