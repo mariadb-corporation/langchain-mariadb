@@ -3,7 +3,7 @@
 [![CI](https://github.com/rusher/langchain-mariadb/actions/workflows/ci.yml/badge.svg)](https://github.com/rusher/langchain-mariadb/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-LangChain's MariaDB integration (langchain-mariadb) provides vector capabilities for working with MariaDB version 11.7.1 and above, distributed under the MIT license. Users can use the provided implementations as-is or customize them for specific needs.
+Released under the MIT license, LangChain's MariaDB integration (`langchain-mariadb`) provides vector capabilities for working with MariaDB version 11.7.1 and above. Users can use the provided implementations as-is or customize them for specific needs.
 Key features include:
 
 * Built-in vector similarity search
@@ -130,7 +130,7 @@ results = vectorstore.similarity_search('ducks', k=10, filter={
 
 ## Configuration Options
 
-The MariaDBStore can be configured with various options to customize its behavior. Here are all available options:
+The `MariaDBStore` can be configured with various options to customize its behavior. Here are all available options:
 
 ### Basic Configuration
 
@@ -240,4 +240,4 @@ chat_history.add_messages([
 ])
 
 print(chat_history.messages)
-```_
+```
