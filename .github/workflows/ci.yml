@@ -3,7 +3,7 @@ name: Run CI Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, develop ]
   pull_request:
   workflow_dispatch:  # Allows to trigger the workflow manually in GitHub UI
 
