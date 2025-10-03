@@ -513,6 +513,20 @@ def test_mariadb_store_delete_docs() -> None:
             datasource=tmppool,
             config=MariaDBStoreSettings(pre_delete_collection=True),
         )
+        vectorstore2 = MariaDBStore.from_texts(
+            texts=texts,
+            collection_name="test_collection_filter2",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            ids=[
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ],
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True),
+        )
+
         vectorstore.delete(
             [
                 "00000000-0000-4000-0000-000000000000",
