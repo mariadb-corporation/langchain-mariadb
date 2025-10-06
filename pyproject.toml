@@ -15,7 +15,7 @@ dynamic = [ "dependencies" ]
 [tool.poetry.dependencies]
 langchain-core = ">=0.2.13,<0.4.0"
 sqlalchemy = "^2"
-numpy = ">=1.24.0"
+numpy = ">=1.24,<3"
 
 [tool.poetry.group.docs.dependencies]
 
