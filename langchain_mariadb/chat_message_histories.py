@@ -6,15 +6,13 @@ import json
 import logging
 import re
 import uuid
-from typing import List, Optional, Sequence, Union, Any
+from typing import Any, List, Optional, Sequence, Union
 
-import mariadb
 from langchain_core.chat_history import BaseChatMessageHistory
 from langchain_core.messages import BaseMessage, message_to_dict, messages_from_dict
 from sqlalchemy import Engine, create_engine
 
 from langchain_mariadb._utils import enquote_identifier
-
 
 logger = logging.getLogger(__name__)
 
@@ -47,19 +45,17 @@ def _create_table_and_index(table_name: str) -> List[str]:
 
 
 def _set_datasource(
-    datasource: Union[mariadb.ConnectionPool | Engine | str],
+    datasource: Union[Engine | str],
     engine_args: Optional[dict[str, Any]] = None,
-) -> mariadb.ConnectionPool | Engine:
+) -> Engine:
     if isinstance(datasource, str):
         return create_engine(url=datasource, **(engine_args or {}))
     elif isinstance(datasource, Engine):
         return datasource
-    elif isinstance(datasource, mariadb.ConnectionPool):
-        return datasource
     else:
         raise ValueError(
             "datasource should be a connection string, an instance of "
-            "sqlalchemy.engine.Engine or a mariadb pool"
+            "sqlalchemy.engine.Engine"
         )
 
 
@@ -72,7 +68,7 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         session_id: str,
         /,
         *,
-        datasource: Union[mariadb.ConnectionPool | Engine | str],
+        datasource: Union[Engine | str],
         engine_args: Optional[dict[str, Any]] = None,
     ) -> None:
         """Initialize a chat message history that persists to a MariaDB database.
@@ -84,32 +80,26 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         - created_at: Timestamp of message creation
 
         Args:
-            table_name: Name of the database table to use (must be alphanumeric + underscores)
+            table_name: Name of the database table to use (must be alphanum + '_')
             session_id: UUID string to identify the chat session
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
+            datasource: datasource (connection string or a sqlalchemy engine)
 
         Example:
             ```python
             from langchain_core.messages import HumanMessage, AIMessage
-            import mariadb
             import uuid
 
-            # Setup connection pool
-            pool = mariadb.ConnectionPool(
-                pool_name="chat_pool",
-                user="root",
-                host="localhost",
-                database="chatdb"
-            )
+            # Create a MariaDB connection pool
+            url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/chatdb"
 
             # Create tables if needed
-            MariaDBChatMessageHistory.create_tables(pool, "chat_messages")
+            MariaDBChatMessageHistory.create_tables(url, "chat_messages")
 
             # Initialize history for a session
             history = MariaDBChatMessageHistory(
                 "chat_messages",
                 str(uuid.uuid4()),
-                datasource=pool
+                datasource=url
             )
 
             # Add messages
@@ -146,50 +136,39 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         self._table_name = table_name
         self._escaped_table = enquote_identifier(table_name)
 
-    def get_connection(self):
-        if isinstance(self._datasource, mariadb.ConnectionPool):
-            return self._datasource.get_connection()
-        else:
-            return self._datasource.raw_connection()
-
     @staticmethod
     def create_tables(
-        datasource: Union[mariadb.ConnectionPool | Engine | str],
+        datasource: Union[Engine | str],
         table_name: str,
         /,
     ) -> None:
         """Create the table schema in the database and create relevant indexes.
 
         Args:
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
+            datasource: datasource (connection string or sqlalchemy engine)
             table_name: Name of the table to create
         """
         queries = _create_table_and_index(table_name)
         logger.info("Creating schema for table %s", table_name)
         ds = _set_datasource(datasource)
-        if isinstance(ds, mariadb.ConnectionPool):
-            con = ds.get_connection()
-        else:
-            con = ds.raw_connection()
+        con = ds.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                for query in queries:
-                    cursor.execute(query)
-                cursor.close()
+            for query in queries:
+                cursor.execute(query)
             con.commit()
         finally:
+            cursor.close()
             con.close()
 
     @staticmethod
-    def drop_table(
-        datasource: Union[mariadb.ConnectionPool | Engine | str], table_name: str, /
-    ) -> None:
+    def drop_table(datasource: Union[Engine | str], table_name: str, /) -> None:
         """Delete the table schema from the database.
 
         WARNING: This will delete the table and all its data permanently.
 
         Args:
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
+            datasource: datasource (connection string or sqlalchemy engine)
             table_name: Name of the table to drop
         """
         escaped_table = enquote_identifier(table_name)
@@ -197,15 +176,13 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
 
         logger.info("Dropping table %s", table_name)
         ds = _set_datasource(datasource)
-        if isinstance(ds, mariadb.ConnectionPool):
-            con = ds.get_connection()
-        else:
-            con = ds.raw_connection()
+        con = ds.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                cursor.execute(query)
+            cursor.execute(query)
             con.commit()
         finally:
+            cursor.close()
             con.close()
 
     def add_messages(self, messages: Sequence[BaseMessage]) -> None:
@@ -221,12 +198,13 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
 
         query = f"INSERT INTO {self._escaped_table} (session_id, message) VALUES (?, ?)"
 
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                cursor.executemany(query, values)
+            cursor.executemany(query, values)
             con.commit()
         finally:
+            cursor.close()
             con.close()
 
     def get_messages(self) -> List[BaseMessage]:
@@ -235,14 +213,18 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         Returns:
             List of messages in chronological order
         """
-        query = f"SELECT message FROM {self._escaped_table} WHERE session_id = ? ORDER BY id"
+        query = (
+            f"SELECT message FROM {self._escaped_table}"
+            f" WHERE session_id = ? ORDER BY id"
+        )
 
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                cursor.execute(query, (self._session_id,))
-                items = [json.loads(record[0]) for record in cursor.fetchall()]
+            cursor.execute(query, (self._session_id,))
+            items = [json.loads(record[0]) for record in cursor.fetchall()]
         finally:
+            cursor.close()
             con.close()
         return messages_from_dict(items)
 
@@ -255,10 +237,11 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
         """Clear all messages for the current session."""
         query = f"DELETE FROM {self._escaped_table} WHERE session_id = ?"
 
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                cursor.execute(query, (self._session_id,))
+            cursor.execute(query, (self._session_id,))
             con.commit()
         finally:
+            cursor.close()
             con.close()

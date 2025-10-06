@@ -1,17 +1,14 @@
-"""MariaDB vector store integration for LangChain."""
-
 from __future__ import annotations
 
-import enum
 import json
 import logging
 import re
 import uuid
 from dataclasses import dataclass
+from enum import Enum
 from typing import (
     Any,
     Callable,
-    cast,
     Iterable,
     List,
     Optional,
@@ -19,10 +16,9 @@ from typing import (
     Tuple,
     Type,
     Union,
+    cast,
 )
 
-# Third party
-import mariadb
 import numpy as np
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
@@ -32,16 +28,8 @@ from langchain_core.vectorstores.utils import maximal_marginal_relevance
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
-# Local
 from langchain_mariadb._utils import enquote_identifier
-from langchain_mariadb.expression_filter import (
-    BaseFilterExpressionConverter,
-    Expression,
-    StringBuilder,
-    Key,
-    Value,
-    Group,
-)
+from langchain_mariadb.expression_filter import MariaDBFilterExpressionConverter
 
 """
 MariaDBStore is a vector store implementation that uses MariaDB database.
@@ -51,17 +39,9 @@ Example:
     ```python
     from langchain_mariadb import MariaDBStore
     from langchain_openai import OpenAIEmbeddings
-    import mariadb
 
     # Create a MariaDB connection pool
-    pool = mariadb.ConnectionPool(
-        pool_name="mypool",
-        pool_size=3,
-        host="localhost",
-        user="myuser",
-        password="mypassword",
-        database="mydatabase"
-    )
+    url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/mydatabase"
 
     # Initialize embeddings model
     embeddings = OpenAIEmbeddings()
@@ -70,7 +50,7 @@ Example:
     store = MariaDBStore.from_texts(
         texts=["Hello, world!", "Another text"],
         embedding=embeddings,
-        datasource=pool,
+        datasource=url,
         collection_name="my_collection"  # Optional, defaults to "langchain"
     )
 
@@ -100,24 +80,16 @@ Example:
     import asyncio
     from langchain_mariadb import MariaDBStore
     from langchain_openai import OpenAIEmbeddings
-    import mariadb
 
     async def search_documents():
         # Create store as before
-        pool = mariadb.ConnectionPool(
-            pool_name="mypool",
-            pool_size=3,
-            host="localhost",
-            user="myuser",
-            password="mypassword",
-            database="mydatabase"
-        )
+        url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/mydatabase"
         
         embeddings = OpenAIEmbeddings()
         store = MariaDBStore.from_texts(
             texts=["Hello, world!", "Another text"],
             embedding=embeddings,
-            datasource=pool
+            datasource=url
         )
 
         # Perform async similarity search
@@ -207,44 +179,11 @@ _LANGCHAIN_DEFAULT_COLLECTION_NAME = "langchain"
 # ------------------------------------------------------------------------------
 # Helper Classes
 # ------------------------------------------------------------------------------
-class DistanceStrategy(str, enum.Enum):
+class DistanceStrategy(str, Enum):
     """Distance strategies for vector similarity."""
 
     EUCLIDEAN = "euclidean"
     COSINE = "cosine"
-
-
-class MariaDBFilterExpressionConverter(BaseFilterExpressionConverter):
-    """Converter for MariaDB filter expressions."""
-
-    def __init__(self, metadata_field_name: str):
-        super().__init__()
-        self.metadata_field_name = metadata_field_name
-
-    def convert_expression_to_context(
-        self, expression: Expression, context: StringBuilder
-    ) -> None:
-        super().convert_operand_to_context(expression.left, context)
-        super().convert_symbol_to_context(expression, context)
-        if expression.right:
-            super().convert_operand_to_context(expression.right, context)
-
-    def convert_key_to_context(self, key: Key, context: StringBuilder) -> None:
-        context.append(f"JSON_VALUE({self.metadata_field_name}, '$.{key.key}')")
-
-    def write_value_range_start(
-        self, _list_value: Value, context: StringBuilder
-    ) -> None:
-        context.append("(")
-
-    def write_value_range_end(self, _list_value: Value, context: StringBuilder) -> None:
-        context.append(")")
-
-    def write_group_start(self, _group: Group, context: StringBuilder) -> None:
-        context.append("(")
-
-    def write_group_end(self, _group: Group, context: StringBuilder) -> None:
-        context.append(")")
 
 
 def _results_to_docs(docs_and_scores: Any) -> List[Document]:
@@ -344,23 +283,26 @@ class MariaDBStoreSettings:
     tables: TableConfig
     columns: ColumnConfig
     pre_delete_collection: bool
+    lazy_init: bool
 
     def __init__(
         self,
         tables: Optional[TableConfig] = None,
         columns: Optional[ColumnConfig] = None,
         pre_delete_collection: bool = False,
+        lazy_init: bool = False,
     ) -> None:
         """Initialize MariaDBStoreSettings with custom or default configurations.
 
         Args:
-            tables: Table configuration (default: TableConfig.default())
-            columns: Column configuration (default: ColumnConfig.default())
-            pre_delete_collection: Whether to delete existing collection (default: False)
+            tables: Table configuration
+            columns: Column configuration
+            pre_delete_collection: delete existing collection (default: False)
         """
         self.tables = tables or TableConfig.default()
         self.columns = columns or ColumnConfig.default()
         self.pre_delete_collection = pre_delete_collection
+        self.lazy_init = lazy_init
 
     @classmethod
     def default(cls) -> "MariaDBStoreSettings":
@@ -380,9 +322,9 @@ class MariaDBStore(VectorStore):
     def __init__(
         self,
         embeddings: Embeddings,
-        embedding_length: Optional[int] = 1536,
+        embedding_length: Optional[int] = None,
         *,
-        datasource: Union[mariadb.ConnectionPool | Engine | str],
+        datasource: Union[Engine | str],
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         collection_metadata: Optional[dict] = None,
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
@@ -396,13 +338,14 @@ class MariaDBStore(VectorStore):
         Args:
             embeddings: Embeddings object for creating embeddings
             embedding_length: Length of embedding vectors (default: 1536)
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
-            collection_name: Name of the collection to store vectors (default: langchain)
+            datasource: datasource (connection string, sqlalchemy engine or
+                        MariaDB connection pool)
+            collection_name: Name of the collection to store vectors
             collection_metadata: Optional metadata for the collection
-            distance_strategy: Strategy for computing vector distances (COSINE or EUCLIDEAN)
-            config: Store configuration for tables and columns (default: MariaDBStoreSettings())
+            distance_strategy: Strategy for distances (COSINE or EUCLIDEAN)
+            config: Store configuration for tables and columns
             logger: Optional logger instance for debugging
-            relevance_score_fn: Optional function to override relevance score calculation
+            relevance_score_fn: function to override relevance score calculation
         """
         # Initialize core attributes
         self.embedding_function = embeddings
@@ -411,14 +354,12 @@ class MariaDBStore(VectorStore):
         self.collection_metadata = collection_metadata
         self._distance_strategy = distance_strategy
         self.pre_delete_collection = config.pre_delete_collection
+        self.lazy_init = config.lazy_init
         self.logger = logger or logging.getLogger(__name__)
-
         self.override_relevance_score_fn = relevance_score_fn
         if isinstance(datasource, str):
             self._datasource = create_engine(url=datasource, **(engine_args or {}))
         elif isinstance(datasource, Engine):
-            self._datasource = datasource
-        elif isinstance(datasource, mariadb.ConnectionPool):
             self._datasource = datasource
         else:
             raise ValueError(
@@ -446,14 +387,18 @@ class MariaDBStore(VectorStore):
         )
 
         # Initialize tables and collection
-        self.__post_init__()
+        if not self.lazy_init:
+            if self._embedding_length is None:
+                self._embedding_length = 1536
+            self._init_vectorstore()
 
-    def __post_init__(
+    def _init_vectorstore(
         self,
     ) -> None:
         """Initialize the store."""
         self.create_tables_if_not_exists()
         self.create_collection()
+        self.lazy_init = False
 
     # Core properties and utilities
     @property
@@ -511,7 +456,8 @@ class MariaDBStore(VectorStore):
         # Create embedding table
         table_query = (
             f"CREATE TABLE IF NOT EXISTS {self._embedding_table_name} ("
-            f"{self._embedding_id_col_name} VARCHAR(36) NOT NULL DEFAULT UUID_v7() PRIMARY KEY,"
+            f"{self._embedding_id_col_name} VARCHAR(36)"
+            f" NOT NULL DEFAULT UUID_v7() PRIMARY KEY,"
             f"{self._embedding_content_col_name} TEXT,"
             f"{self._embedding_meta_col_name} JSON,"
             f"{self._embedding_emb_col_name} VECTOR({self._embedding_length}) NOT NULL,"
@@ -530,7 +476,8 @@ class MariaDBStore(VectorStore):
         # Create collection table
         col_table_query = (
             f"CREATE TABLE IF NOT EXISTS {self._collection_table_name}("
-            f"{self._collection_id_col_name} UUID NOT NULL DEFAULT UUID_v7() PRIMARY KEY,"
+            f"{self._collection_id_col_name} UUID"
+            f" NOT NULL DEFAULT UUID_v7() PRIMARY KEY,"
             f"{self._collection_label_col_name} VARCHAR(256),"
             f"{self._collection_meta_col_name} JSON,"
             f"UNIQUE KEY {col_uniq_key_name} ({self._collection_label_col_name})"
@@ -539,11 +486,12 @@ class MariaDBStore(VectorStore):
 
         # Add foreign key constraint
         alter_query = (
-            f"ALTER TABLE {self._embedding_table_name} "
-            f"ADD COLUMN IF NOT EXISTS collection_id uuid,"
-            f"ADD CONSTRAINT FOREIGN KEY IF NOT EXISTS {col_index_name} (collection_id) "
-            f"REFERENCES {self._collection_table_name}({self._collection_id_col_name}) "
-            f"ON DELETE CASCADE"
+            f"ALTER TABLE {self._embedding_table_name}"
+            f" ADD COLUMN IF NOT EXISTS collection_id uuid,"
+            f" ADD CONSTRAINT FOREIGN KEY IF NOT EXISTS"
+            f" {col_index_name} (collection_id)"
+            f" REFERENCES {self._collection_table_name}({self._collection_id_col_name})"
+            f" ON DELETE CASCADE"
         )
 
         # Create collection ID index
@@ -553,32 +501,47 @@ class MariaDBStore(VectorStore):
         )
 
         # Execute all queries
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                cursor.execute(table_query)
-                cursor.execute(col_table_query)
-                cursor.execute(alter_query)
-                cursor.execute(create_collection_id_idx)
+            cursor.execute(table_query)
+            cursor.execute(col_table_query)
+            cursor.execute(alter_query)
+            cursor.execute(create_collection_id_idx)
             con.commit()
         finally:
+            cursor.close()
             con.close()
-
-    def get_connection(self):
-        if isinstance(self._datasource, mariadb.ConnectionPool):
-            return self._datasource.get_connection()
-        else:
-            return self._datasource.raw_connection()
 
     def drop_tables(self) -> None:
         """Drop all tables used by the vector store."""
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                cursor.execute(f"DROP TABLE IF EXISTS {self._embedding_table_name}")
-                cursor.execute(f"DROP TABLE IF EXISTS {self._collection_table_name}")
+            cursor.execute(f"DROP TABLE IF EXISTS {self._embedding_table_name}")
+            cursor.execute(f"DROP TABLE IF EXISTS {self._collection_table_name}")
             con.commit()
         finally:
+            cursor.close()
+            con.close()
+
+    def _check_if_collection_exists(self) -> str | None:
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
+        try:
+            cursor.execute(
+                f"SELECT {self._collection_id_col_name}"
+                f" FROM {self._collection_table_name}"
+                f" WHERE {self._collection_label_col_name}=?",
+                (self.collection_name,),
+            )
+            row = cursor.fetchone()
+            if row is not None:
+                return row[0]
+            return None
+
+        finally:
+            cursor.close()
             con.close()
 
     def create_collection(self) -> None:
@@ -586,66 +549,68 @@ class MariaDBStore(VectorStore):
         if self.pre_delete_collection:
             self.delete_collection()
 
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                # Check if collection exists
+            # Check if collection exists
+            collection_id = self._check_if_collection_exists()
+            if collection_id is not None:
+                self._collection_id = collection_id
+                return
+            # Create new collection
+            query = (
+                f"INSERT INTO {self._collection_table_name}"
+                f"({self._collection_label_col_name},"
+                f" {self._collection_meta_col_name})"
+                f" VALUES (?,?) RETURNING {self._collection_id_col_name}"
+            )
+            cursor.execute(
+                query, (self.collection_name, json.dumps(self.collection_metadata))
+            )
+            row = cursor.fetchone()
+            if row is not None:
+                self._collection_id = cast(str, row[0])
+            con.commit()
+        finally:
+            cursor.close()
+            con.close()
+
+    def delete_collection(self) -> None:
+        """Delete the current collection and its associated data."""
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
+        try:
+            try:
+                # Find collection ID
                 cursor.execute(
-                    f"SELECT {self._collection_id_col_name} FROM {self._collection_table_name} "
-                    f"WHERE {self._collection_label_col_name}=?",
+                    f"SELECT {self._collection_id_col_name}"
+                    f" FROM {self._collection_table_name}"
+                    f" WHERE {self._collection_label_col_name}=?",
                     (self.collection_name,),
                 )
                 row = cursor.fetchone()
 
                 if row is not None:
-                    self._collection_id = row[0]
-                    return
-
-                # Create new collection
-                query = (
-                    f"INSERT INTO {self._collection_table_name}"
-                    f"({self._collection_label_col_name}, {self._collection_meta_col_name}) "
-                    f"VALUES (?,?) RETURNING {self._collection_id_col_name}"
-                )
-                cursor.execute(
-                    query, (self.collection_name, json.dumps(self.collection_metadata))
-                )
-                row = cursor.fetchone()
-                self._collection_id = row[0]
-            con.commit()
-        finally:
-            con.close()
-
-    def delete_collection(self) -> None:
-        """Delete the current collection and its associated data."""
-        con = self.get_connection()
-        try:
-            with con.cursor() as cursor:
-                try:
-                    # Find collection ID
-                    cursor.execute(
-                        f"SELECT {self._collection_id_col_name} FROM {self._collection_table_name} "
-                        f"WHERE {self._collection_label_col_name}=?",
-                        (self.collection_name,),
+                    collection_id = row[0]
+                    # Delete associated embeddings and collection
+                    query = (
+                        f"DELETE FROM {self._embedding_table_name}"
+                        f" WHERE collection_id = ?"
                     )
-                    row = cursor.fetchone()
-
-                    if row is not None:
-                        collection_id = row[0]
-                        # Delete associated embeddings and collection
-                        cursor.execute(
-                            f"DELETE FROM {self._embedding_table_name} WHERE collection_id = ?",
-                            (collection_id,),
-                        )
-                        cursor.execute(
-                            f"DELETE FROM {self._collection_table_name} "
-                            f"WHERE {self._collection_id_col_name} = ?",
-                            (collection_id,),
-                        )
-                except Exception as e:
-                    self.logger.debug("Failed to delete previous collection")
+                    cursor.execute(
+                        query,
+                        (collection_id,),
+                    )
+                    cursor.execute(
+                        f"DELETE FROM {self._collection_table_name} "
+                        f"WHERE {self._collection_id_col_name} = ?",
+                        (collection_id,),
+                    )
+            except Exception:
+                self.logger.debug("Failed to delete previous collection")
             con.commit()
         finally:
+            cursor.close()
             con.close()
 
     def delete(
@@ -661,19 +626,25 @@ class MariaDBStore(VectorStore):
         """
         if not ids:
             return
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                self.logger.debug("Deleting vectors by IDs")
-                data = [(i,) for i in ids]
-                cursor.executemany(
-                    f"DELETE FROM {self._embedding_table_name} "
-                    f"WHERE {self._embedding_id_col_name} = ? "
-                    f"AND collection_id = '{self._collection_id}'",
-                    data,
-                )
-                con.commit()
+            self.logger.debug("Deleting vectors by IDs")
+            data = [(i,) for i in ids]
+            cursor.executemany(
+                f"DELETE FROM {self._embedding_table_name} "
+                f"WHERE {self._embedding_id_col_name} = ? "
+                f"AND collection_id = '{self._collection_id}'",
+                data,
+            )
+            con.commit()
+        except Exception as e:
+            if hasattr(e, "errno") and e.errno == 1146:  # NO SUCH TABLE
+                return
+            else:
+                raise e
         finally:
+            cursor.close()
             con.close()
 
     def get_by_ids(self, ids: Sequence[str], /) -> List[Document]:
@@ -699,20 +670,21 @@ class MariaDBStore(VectorStore):
         )
 
         documents = []
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                cursor.execute(query)
-                rows = cursor.fetchall()
-                for row in rows:
-                    documents.append(
-                        Document(
-                            id=row[0],
-                            page_content=row[1],
-                            metadata=json.loads(row[2]),
-                        )
+            cursor.execute(query)
+            rows = cursor.fetchall()
+            for row in rows:
+                documents.append(
+                    Document(
+                        id=row[0],
+                        page_content=row[1],
+                        metadata=json.loads(row[2]),
                     )
+                )
         finally:
+            cursor.close()
             con.close()
         return documents
 
@@ -750,8 +722,8 @@ class MariaDBStore(VectorStore):
                 else:
                     if not re.match("^[a-zA-Z0-9_\\-]+$", _id):
                         raise ValueError(
-                            f"ID format can only be alphanumeric with underscore and minus sign, "
-                            f"but got value: {_id}"
+                            f"ID format can only be alphanumeric with underscore "
+                            f"and minus sign, but got value: {_id}"
                         )
                     ids_.append(_id)
 
@@ -759,41 +731,53 @@ class MariaDBStore(VectorStore):
         if not metadatas:
             metadatas = [{} for _ in texts]
 
-        # Insert embeddings into database
-        con = self.get_connection()
-        try:
-            with con.cursor() as cursor:
-                data = []
-                for text, metadata, embedding, id_ in zip(
-                    texts, metadatas, embeddings, ids_
-                ):
-                    binary_emb = self._embedding_to_binary(embedding)
-                    data.append(
-                        (
-                            id_,
-                            text,
-                            json.dumps(metadata),
-                            binary_emb,
-                            self._collection_id,
-                        )
-                    )
+        if len(embeddings) == 0:
+            return []
 
-                query = (
-                    f"INSERT INTO {self._embedding_table_name} ("
-                    f"{self._embedding_id_col_name}, "
-                    f"{self._embedding_content_col_name}, "
-                    f"{self._embedding_meta_col_name}, "
-                    f"{self._embedding_emb_col_name}, "
-                    f"collection_id"
-                    f") VALUES (?,?,?,?,?) "
-                    f"ON DUPLICATE KEY UPDATE "
-                    f"{self._embedding_content_col_name} = VALUES({self._embedding_content_col_name}), "
-                    f"{self._embedding_meta_col_name} = VALUES({self._embedding_meta_col_name}), "
-                    f"{self._embedding_emb_col_name} = VALUES({self._embedding_emb_col_name})"
+        # Prepare data for insertion
+        data = []
+        for text, metadata, embedding, id_ in zip(texts, metadatas, embeddings, ids_):
+            binary_emb = self._embedding_to_binary(embedding)
+            data.append(
+                (
+                    id_,
+                    text,
+                    json.dumps(metadata),
+                    binary_emb,
+                    self._collection_id,
                 )
-                cursor.executemany(query, data)
-                con.commit()
+            )
+
+        # Insert embeddings into database in batches
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
+        try:
+            query = (
+                f"INSERT INTO {self._embedding_table_name} ("
+                f"{self._embedding_id_col_name}, "
+                f"{self._embedding_content_col_name}, "
+                f"{self._embedding_meta_col_name}, "
+                f"{self._embedding_emb_col_name}, "
+                f"collection_id"
+                f") VALUES (?,?,?,?,?) "
+                f"ON DUPLICATE KEY UPDATE "
+                f"{self._embedding_content_col_name} = "
+                f"VALUES({self._embedding_content_col_name}), "
+                f"{self._embedding_meta_col_name} = "
+                f"VALUES({self._embedding_meta_col_name}), "
+                f"{self._embedding_emb_col_name} = "
+                f"VALUES({self._embedding_emb_col_name})"
+            )
+
+            # Process in batches of 1000 parameters
+            batch_size = 1000
+            for i in range(0, len(data), batch_size):
+                batch = data[i : i + batch_size]
+                cursor.executemany(query, batch)
+            con.commit()
+
         finally:
+            cursor.close()
             con.close()
         return ids_
 
@@ -817,7 +801,14 @@ class MariaDBStore(VectorStore):
             List of ids from adding the texts into the vectorstore.
         """
         texts_ = list(texts)
+        if not texts_:
+            return []
         embeddings = self.embedding_function.embed_documents(texts_)
+        if len(embeddings) == 0:
+            return []
+        if self.lazy_init and embeddings:
+            self._embedding_length = len(embeddings[0])
+            self._init_vectorstore()
         return self.add_embeddings(
             texts=texts_,
             embeddings=list(embeddings),
@@ -1089,7 +1080,8 @@ class MariaDBStore(VectorStore):
         filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
-        """Return docs selected using maximal marginal relevance with scores asynchronously.
+        """Return docs selected using maximal marginal relevance with scores
+        asynchronously.
 
         Args:
             query: Text to look up documents similar to
@@ -1236,7 +1228,8 @@ class MariaDBStore(VectorStore):
         filter: Union[None, dict] = None,
         **kwargs: Any,
     ) -> List[Tuple[Document, float]]:
-        """Return docs selected using maximal marginal relevance with scores asynchronously.
+        """Return docs selected using maximal marginal relevance with scores
+        asynchronously.
 
         Maximal marginal relevance optimizes for similarity to query AND diversity
         among selected documents.
@@ -1307,7 +1300,10 @@ class MariaDBStore(VectorStore):
         need_embeddings: bool = False,
     ) -> Sequence[Any]:
         """Query the collection for similar documents."""
-        distance_expr = f"vec_distance_{self._distance_strategy.value}({self._embedding_emb_col_name}, ?) as distance"
+        distance_expr = (
+            f"vec_distance_{self._distance_strategy.value}({self._embedding_emb_col_name}"
+            f", ?) as distance"
+        )
         base_query, filter_sql = self._build_base_select_query(
             distance_expr, need_embeddings, filter
         )
@@ -1318,6 +1314,10 @@ class MariaDBStore(VectorStore):
             f"WHERE collection_id = ?{filter_sql} "
             f"ORDER BY distance ASC LIMIT ?"
         )
+
+        if self.lazy_init and not self._embedding_length:
+            self._embedding_length = len(embedding)
+            self._init_vectorstore()
 
         return self.__inner_query_collection(embedding=embedding, k=k, query_=query)
 
@@ -1334,7 +1334,10 @@ class MariaDBStore(VectorStore):
                 f"1.0 - vec_distance_cosine({self._embedding_emb_col_name}, ?) as score"
             )
         else:
-            score_expr = f"1.0 - vec_distance_cosine({self._embedding_emb_col_name}, ?) / SQRT(2) as score"
+            score_expr = (
+                f"1.0 - vec_distance_cosine({self._embedding_emb_col_name}, ?)"
+                f" / SQRT(2) as score"
+            )
 
         base_query, filter_sql = self._build_base_select_query(
             score_expr, filter=filter
@@ -1365,13 +1368,14 @@ class MariaDBStore(VectorStore):
         Returns:
             Sequence of query results
         """
-        con = self.get_connection()
+        con = self._datasource.raw_connection()
+        cursor = con.cursor()
         try:
-            with con.cursor() as cursor:
-                binary_emb = self._embedding_to_binary(embedding)
-                cursor.execute(query_, (binary_emb, self._collection_id, k))
-                return cursor.fetchall()
+            binary_emb = self._embedding_to_binary(embedding)
+            cursor.execute(query_, (binary_emb, self._collection_id, k))
+            return cursor.fetchall()
         finally:
+            cursor.close()
             con.close()
 
     def _create_filter_sql(self, filters: Union[None, dict] = None) -> str:
@@ -1411,7 +1415,7 @@ class MariaDBStore(VectorStore):
         ids: Optional[List[str]] = None,
         *,
         metadatas: Optional[List[dict]] = None,
-        datasource: Union[mariadb.ConnectionPool | Engine | str],
+        datasource: Union[Engine | str],
         embedding: Embeddings,
         embedding_length: Optional[int] = None,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
@@ -1428,7 +1432,8 @@ class MariaDBStore(VectorStore):
             embeddings: List of embedding vectors
             ids: Optional list of IDs for the documents
             metadatas: Optional list of metadata dicts
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
+            datasource: datasource (connection string, sqlalchemy engine or
+                        MariaDB connection pool)
             embedding: Embeddings object for creating embeddings
             embedding_length: Optional length of embedding vectors
             collection_name: Name of collection (default: langchain)
@@ -1451,9 +1456,10 @@ class MariaDBStore(VectorStore):
 
         # Determine embedding length if not specified
         emb_len = embedding_length
-        if embedding_length is None and embeddings:
+        if embedding_length is None and embeddings and len(embeddings) > 0:
             emb_len = len(embeddings[0])
 
+        config.lazy_init = False
         # Create store instance
         store = cls(
             embedding,
@@ -1489,13 +1495,14 @@ class MariaDBStore(VectorStore):
             embedding: Embeddings object for creating embeddings
             metadatas: Optional list of metadata dicts for each text
             ids: Optional list of unique IDs for each text
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
-            collection_name: Name of the collection to store vectors (default: langchain)
-            distance_strategy: Strategy for computing vector distances (COSINE or EUCLIDEAN)
+            datasource: datasource (connection string, sqlalchemy engine or
+                        MariaDB connection pool)
+            collection_name: Name of the collection to store vectors
+            distance_strategy: Strategy for distances (COSINE or EUCLIDEAN)
             embedding_length: Length of embedding vectors (default: 1536)
-            config: Store configuration for tables and columns (default: MariaDBStoreSettings())
+            config: Store configuration for tables and columns
             logger: Optional logger instance for debugging
-            relevance_score_fn: Optional function to override relevance score calculation
+            relevance_score_fn: override function relevance score calculation
             **kwargs: Additional arguments passed to add_embeddings
 
         Returns:
@@ -1547,7 +1554,10 @@ class MariaDBStore(VectorStore):
                 embeddings = OpenAIEmbeddings()
                 text_embeddings = embeddings.embed_documents(texts)
                 text_embedding_pairs = list(zip(texts, text_embeddings))
-                vectorstore = MariaDBStore.from_embeddings(text_embedding_pairs, embeddings)
+                vectorstore = MariaDBStore.from_embeddings(
+                  text_embedding_pairs,
+                  embeddings
+                )
         """
         # Split text-embedding pairs
         texts = [t[0] for t in text_embeddings]
@@ -1573,19 +1583,21 @@ class MariaDBStore(VectorStore):
         *,
         collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
         distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
-        datasource: Union[mariadb.ConnectionPool | Engine | str],
+        datasource: Union[Engine | str],
         config: MariaDBStoreSettings = MariaDBStoreSettings(),
         **kwargs: Any,
     ) -> MariaDBStore:
         """Create a MariaDBStore instance from an existing index.
 
-        This method returns an instance of the store without inserting any new embeddings.
+        This method returns an instance of the store without inserting any new
+        embeddings.
 
         Args:
             embedding: Embeddings object for creating embeddings
             collection_name: Name of collection (default: langchain)
             distance_strategy: Strategy for computing distances
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB
+                        connection pool)
             **kwargs: Additional arguments passed to constructor
 
         Returns:
@@ -1613,7 +1625,8 @@ class MariaDBStore(VectorStore):
         Args:
             documents: List of Document objects to store
             embedding: Embeddings object for creating embeddings
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB connection pool)
+            datasource: datasource (connection string, sqlalchemy engine or MariaDB
+                        connection pool)
             collection_name: Name of collection (default: langchain)
             distance_strategy: Strategy for computing distances
             ids: Optional list of IDs for the documents

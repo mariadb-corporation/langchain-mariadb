@@ -2,7 +2,8 @@
 version: "3"
 
 services:
-  postgres:
+  mariadb:
+    container_name: mariadb-server
     image: mariadb:11.7
     environment:
       MARIADB_USER: langchain
