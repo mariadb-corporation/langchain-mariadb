@@ -387,6 +387,7 @@ class MariaDBStore(VectorStore):
         )
 
         # Initialize tables and collection
+        self._collection_id: Optional[str] = None
         if not self.lazy_init:
             if self._embedding_length is None:
                 self._embedding_length = 1536
@@ -631,14 +632,14 @@ class MariaDBStore(VectorStore):
         try:
             self.logger.debug("Deleting vectors by IDs")
             data = [(i,) for i in ids]
-            
+
             query = (
                 f"DELETE FROM {self._embedding_table_name} "
                 f"WHERE {self._embedding_id_col_name} = ? "
             )
 
             if self._collection_id is not None:
-                query += f"AND collection_id = '{self._collection_id}'"              
+                query += f"AND collection_id = '{self._collection_id}'"
 
             cursor.executemany(
                 query,
