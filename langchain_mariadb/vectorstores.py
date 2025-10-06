@@ -631,10 +631,17 @@ class MariaDBStore(VectorStore):
         try:
             self.logger.debug("Deleting vectors by IDs")
             data = [(i,) for i in ids]
-            cursor.executemany(
+            
+            query = (
                 f"DELETE FROM {self._embedding_table_name} "
                 f"WHERE {self._embedding_id_col_name} = ? "
-                f"AND collection_id = '{self._collection_id}'",
+            )
+
+            if self._collection_id is not None:
+                query += f"AND collection_id = '{self._collection_id}'"              
+
+            cursor.executemany(
+                query,
                 data,
             )
             con.commit()
