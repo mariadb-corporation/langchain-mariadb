@@ -555,7 +555,7 @@ def test_mariadb_store_delete_docs() -> None:
             datasource=tmppool,
             config=MariaDBStoreSettings(pre_delete_collection=True),
         )
-        vectorstore2 = MariaDBStore.from_texts(
+        MariaDBStore.from_texts(
             texts=texts,
             collection_name="test_collection_filter2",
             embedding=FakeEmbeddingsWithAdaDimension(),
@@ -577,13 +577,22 @@ def test_mariadb_store_delete_docs() -> None:
         )
         con = tmppool.raw_connection()
         cursor = con.cursor()
-        cursor.execute("SELECT id FROM langchain_embedding")
-        rows = cursor.fetchall()
-        cursor.close()
-        con.close()
 
+        cursor.execute(
+            "SELECT le.id FROM langchain_embedding le join langchain_collection lc on le.collection_id = lc.id WHERE lc.label='test_collection_filter'"
+        )
+        rows = cursor.fetchall()
         assert len(rows) == 1
         assert rows[0][0] == "20000000-0000-4000-0000-000000000000"
+
+        cursor.execute(
+            "SELECT le.id FROM langchain_embedding le join langchain_collection lc on le.collection_id = lc.id WHERE lc.label='test_collection_filter2'"
+        )
+        rows = cursor.fetchall()
+        assert len(rows) == 0
+
+        cursor.close()
+        con.close()
 
         vectorstore.delete(
             [
@@ -598,6 +607,91 @@ def test_mariadb_store_delete_docs() -> None:
         cursor.close()
         con.close()
         assert len(rows) == 0
+
+
+def test_mariadb_store_delete_docs_filter() -> None:
+    """Add and delete documents."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        vectorstore = MariaDBStore.from_texts(
+            texts=texts,
+            collection_name="test_collection_filter",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            ids=[
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ],
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True),
+        )
+
+        vectorstore.delete(
+            [
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+            ],
+            filter=({"page": {"$ne": "1"}}),
+        )
+        con = tmppool.raw_connection()
+        cursor = con.cursor()
+        cursor.execute("SELECT id FROM langchain_embedding")
+        rows = cursor.fetchall()
+        cursor.close()
+        con.close()
+
+        assert len(rows) == 2
+        assert rows[0][0] == "10000000-0000-4000-0000-000000000000"
+        assert rows[1][0] == "20000000-0000-4000-0000-000000000000"
+
+        vectorstore.delete(
+            [
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ]
+        )  # Should not raise on missing ids
+        con = tmppool.raw_connection()
+        cursor = con.cursor()
+        cursor.execute("SELECT id FROM langchain_embedding")
+        rows = cursor.fetchall()
+        cursor.close()
+        con.close()
+        assert len(rows) == 0
+
+
+def test_mariadb_store_delete_docs_filter_only() -> None:
+    """Add and delete documents."""
+    texts = ["foo", "bar", "baz"]
+    metadatas = [{"page": str(i)} for i in range(len(texts))]
+    with pool() as tmppool:
+        vectorstore = MariaDBStore.from_texts(
+            texts=texts,
+            collection_name="test_collection_filter",
+            embedding=FakeEmbeddingsWithAdaDimension(),
+            metadatas=metadatas,
+            ids=[
+                "00000000-0000-4000-0000-000000000000",
+                "10000000-0000-4000-0000-000000000000",
+                "20000000-0000-4000-0000-000000000000",
+            ],
+            datasource=tmppool,
+            config=MariaDBStoreSettings(pre_delete_collection=True),
+        )
+
+        vectorstore.delete(
+            filter=({"page": {"$ne": "1"}}),
+        )
+        con = tmppool.raw_connection()
+        cursor = con.cursor()
+        cursor.execute("SELECT id FROM langchain_embedding")
+        rows = cursor.fetchall()
+        cursor.close()
+        con.close()
+
+        assert len(rows) == 1
+        assert rows[0][0] == "10000000-0000-4000-0000-000000000000"
 
 
 @pytest.mark.asyncio

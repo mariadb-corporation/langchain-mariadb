@@ -625,26 +625,42 @@ class MariaDBStore(VectorStore):
             ids: List of IDs to delete
             **kwargs: Additional arguments (not used)
         """
-        if not ids:
-            return
         con = self._datasource.raw_connection()
         cursor = con.cursor()
         try:
+            filter_sql = self._create_filter_sql(kwargs.get("filter", None))
+
+            # Return early if nothing to delete
+            if not ids and not filter_sql:
+                self.logger.debug("No IDs or filter provided, nothing to delete")
+                return
+
             self.logger.debug("Deleting vectors by IDs")
-            data = [(i,) for i in ids]
+
+            # Build the WHERE clause
+            where_clauses = []
+            data = []
+
+            if ids:
+                where_clauses.append(f"{self._embedding_id_col_name} = ?")
+                data = [(i,) for i in ids]
+
+            if filter_sql:
+                where_clauses.append(filter_sql)
+
+            if self._collection_id is not None:
+                where_clauses.append(f"collection_id = '{self._collection_id}'")
 
             query = (
                 f"DELETE FROM {self._embedding_table_name} "
-                f"WHERE {self._embedding_id_col_name} = ? "
+                f"WHERE {' AND '.join(where_clauses)}"
             )
 
-            if self._collection_id is not None:
-                query += f"AND collection_id = '{self._collection_id}'"
-
-            cursor.executemany(
-                query,
-                data,
-            )
+            # Use executemany if we have IDs, otherwise execute once
+            if ids:
+                cursor.executemany(query, data)
+            else:
+                cursor.execute(query)
             con.commit()
         except Exception as e:
             if hasattr(e, "errno") and e.errno == 1146:  # NO SUCH TABLE
