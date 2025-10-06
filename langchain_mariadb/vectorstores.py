@@ -912,7 +912,7 @@ class MariaDBStore(VectorStore):
         if self.override_relevance_score_fn is None:
             embedding = self.embeddings.embed_query(query)
             results = self.__query_with_score_collection(
-                embedding=embedding, k=k, filter=None
+                embedding=embedding, k=k, filter=kwargs.get("filter", None)
             )
             docs = self._results_to_docs_and_scores(results)
             return docs
@@ -944,7 +944,7 @@ class MariaDBStore(VectorStore):
         if self.override_relevance_score_fn is None:
             embedding = self.embeddings.embed_query(query)
             results = self.__query_with_score_collection(
-                embedding=embedding, k=k, filter=None
+                embedding=embedding, k=k, filter=kwargs.get("filter", None)
             )
             docs = self._results_to_docs_and_scores(results)
             return docs

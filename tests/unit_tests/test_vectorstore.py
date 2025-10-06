@@ -882,6 +882,19 @@ def test_mariadb_store_relevance_score() -> None:
         )
         assert scores == (1.0, 0.9996744261675065, 0.9986996093328621)
 
+        output = docsearch.similarity_search_with_relevance_scores(
+            "foo", k=3, filter=({"page": {"$ne": "1"}})
+        )
+        docs, scores = zip(*output)
+        _compare_documents(
+            docs,
+            [
+                Document(page_content="foo", metadata={"page": "0"}),
+                Document(page_content="baz", metadata={"page": "2"}),
+            ],
+        )
+        assert scores == (1.0, 0.9986996093328621)
+
 
 @pytest.mark.asyncio
 async def test_amariadb_store_relevance_score() -> None:
@@ -909,6 +922,19 @@ async def test_amariadb_store_relevance_score() -> None:
             ],
         )
         assert scores == (1.0, 0.9996744261675065, 0.9986996093328621)
+
+        output = await docsearch.asimilarity_search_with_relevance_scores(
+            "foo", k=3, filter=({"page": {"$ne": "1"}})
+        )
+        docs, scores = zip(*output)
+        _compare_documents(
+            docs,
+            [
+                Document(page_content="foo", metadata={"page": "0"}),
+                Document(page_content="baz", metadata={"page": "2"}),
+            ],
+        )
+        assert scores == (1.0, 0.9986996093328621)
 
 
 def test_mariadb_store_retriever_search_threshold() -> None:
