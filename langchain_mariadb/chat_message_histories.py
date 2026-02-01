@@ -228,10 +228,16 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
             con.close()
         return messages_from_dict(items)
 
-    @property  # type: ignore[override]
+    @property
     def messages(self) -> List[BaseMessage]:
         """Get all messages in the chat history."""
         return self.get_messages()
+
+    @messages.setter
+    def messages(self, value: list[BaseMessage]) -> None:
+        """Clear the stored messages and appends a list of messages."""
+        self.clear()
+        self.add_messages(value)
 
     def clear(self) -> None:
         """Clear all messages for the current session."""
