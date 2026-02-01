@@ -1,6 +1,6 @@
 [project]
 name = "langchain-mariadb"
-version = "0.0.19"
+version = "0.0.20"
 description = "An integration package connecting MariaDB and LangChain"
 readme = "README.md"
 authors = []
