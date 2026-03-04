@@ -1342,7 +1342,10 @@ class MariaDBStore(VectorStore):
         if self.lazy_init and not self._embedding_length:
             self._embedding_length = len(embedding)
             self._init_vectorstore()
-
+        else:
+            collection_id = self._check_if_collection_exists()
+            if collection_id is not None:
+                self._collection_id = collection_id
         return self.__inner_query_collection(embedding=embedding, k=k, query_=query)
 
     def __query_with_score_collection(
