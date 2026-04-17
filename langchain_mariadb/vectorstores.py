@@ -176,22 +176,22 @@ class MariaDBStoreSettings:
 # ------------------------------------------------------------------------------
 class MariaDBStore(VectorStore):
     """MariaDB vector store integration for LangChain.
-    
+
     A vector store implementation that uses MariaDB database for storing and
     retrieving embeddings with similarity search capabilities.
-    
+
     Requires MariaDB 11.7.1 or later with vector support enabled.
-    
+
     Examples:
         Basic usage::
-        
+
             from langchain_mariadb import MariaDBStore
             from langchain_openai import OpenAIEmbeddings
-            
+
             # Create connection
             url = "mariadb+mariadbconnector://user:pass@localhost/db"
             embeddings = OpenAIEmbeddings()
-            
+
             # Create vector store
             store = MariaDBStore.from_texts(
                 texts=["Hello, world!", "Another text"],
@@ -199,19 +199,19 @@ class MariaDBStore(VectorStore):
                 datasource=url,
                 collection_name="my_collection"
             )
-            
+
             # Search similar texts
             results = store.similarity_search("Hello", k=2)
-        
+
         Search with metadata filter::
-        
+
             results = store.similarity_search(
                 "Hello",
                 filter={"category": "greeting"}
             )
-        
+
         Complex filter with operators::
-        
+
             results = store.similarity_search(
                 "Hello",
                 filter={
@@ -221,26 +221,26 @@ class MariaDBStore(VectorStore):
                     ]
                 }
             )
-        
+
         Asynchronous usage::
-        
+
             import asyncio
-            
+
             async def search_docs():
                 results = await store.amax_marginal_relevance_search(
                     "Hello", k=2, fetch_k=10, lambda_mult=0.5
                 )
                 return results
-            
+
             results = asyncio.run(search_docs())
-        
+
         Custom configuration::
-        
+
             from langchain_mariadb import (
                 MariaDBStore, MariaDBStoreSettings,
                 TableConfig, ColumnConfig
             )
-            
+
             config = MariaDBStoreSettings(
                 tables=TableConfig(
                     embedding_table="custom_embeddings",
@@ -252,18 +252,18 @@ class MariaDBStore(VectorStore):
                     metadata="doc_metadata"
                 )
             )
-            
+
             store = MariaDBStore.from_texts(
                 texts=["Hello"],
                 embedding=embeddings,
                 datasource=url,
                 config=config
             )
-        
+
         Working with documents::
-        
+
             from langchain_core.documents import Document
-            
+
             documents = [
                 Document(
                     page_content="Hello",
@@ -274,16 +274,16 @@ class MariaDBStore(VectorStore):
                     metadata={"source": "greeting.txt"}
                 )
             ]
-            
+
             store = MariaDBStore.from_documents(
                 documents=documents,
                 embedding=embeddings,
                 datasource=url
             )
-            
+
             # Add more documents
             store.add_documents(documents)
-    
+
     Note:
         - Requires MariaDB 11.7.1 or later
         - Database user needs CREATE TABLE and CREATE INDEX permissions
@@ -374,6 +374,16 @@ class MariaDBStore(VectorStore):
         self.create_tables_if_not_exists()
         self.create_collection()
         self.lazy_init = False
+
+    def _ensure_collection_ready(self, embedding: Optional[List[float]] = None) -> None:
+        """Ensure ``_collection_id`` is resolved before queries/mutations."""
+        if self.lazy_init and not self._embedding_length and embedding is not None:
+            self._embedding_length = len(embedding)
+            self._init_vectorstore()
+        elif self._collection_id is None:
+            collection_id = self._check_if_collection_exists()
+            if collection_id is not None:
+                self._collection_id = collection_id
 
     # Core properties and utilities
     @property
@@ -599,6 +609,8 @@ class MariaDBStore(VectorStore):
             ids: List of IDs to delete
             **kwargs: Additional arguments (not used)
         """
+        if self._collection_id is None:
+            self._ensure_collection_ready()
         con = self._datasource.raw_connection()
         cursor = con.cursor()
         try:
@@ -655,6 +667,9 @@ class MariaDBStore(VectorStore):
 
         if not ids_:
             return []
+
+        if self._collection_id is None:
+            self._ensure_collection_ready()
 
         # Build and execute query
         query = (
@@ -731,6 +746,11 @@ class MariaDBStore(VectorStore):
 
         if len(embeddings) == 0:
             return []
+
+        # Ensure the collection is initialized (covers direct calls to
+        # add_embeddings() when lazy_init=True and embedding_length was set).
+        if self._collection_id is None:
+            self._ensure_collection_ready(embeddings[0])
 
         # Prepare data for insertion
         data = []
@@ -1313,13 +1333,8 @@ class MariaDBStore(VectorStore):
             f"ORDER BY distance ASC LIMIT ?"
         )
 
-        if self.lazy_init and not self._embedding_length:
-            self._embedding_length = len(embedding)
-            self._init_vectorstore()
-        else:
-            collection_id = self._check_if_collection_exists()
-            if collection_id is not None:
-                self._collection_id = collection_id
+        if self._collection_id is None:
+            self._ensure_collection_ready(embedding)
         return self.__inner_query_collection(embedding=embedding, k=k, query_=query)
 
     def __query_with_score_collection(
@@ -1351,6 +1366,8 @@ class MariaDBStore(VectorStore):
             f"ORDER BY score DESC LIMIT ?"
         )
 
+        if self._collection_id is None:
+            self._ensure_collection_ready(embedding)
         return self.__inner_query_collection(embedding=embedding, k=k, query_=query)
 
     def __inner_query_collection(
@@ -1514,7 +1531,14 @@ class MariaDBStore(VectorStore):
 
         Returns:
             MariaDBStore instance initialized with the provided texts
+
+        Raises:
+            ValueError: If ``datasource`` is not provided.
         """
+        if datasource is None:
+            raise ValueError(
+                "A 'datasource' (connection string or SQLAlchemy Engine) is required."
+            )
         embeddings = embedding.embed_documents(list(texts))
 
         # Create store instance

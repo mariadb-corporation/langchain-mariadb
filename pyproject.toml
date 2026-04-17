@@ -1,18 +1,22 @@
-[tool.poetry]
+[project]
 name = "langchain-mariadb"
 version = "0.0.20"
 description = "An integration package connecting MariaDB and LangChain"
 readme = "README.md"
-authors = ["MariaDB Corporation"]
-repository = "https://github.com/mariadb-corporation/langchain-mariadb"
+authors = [{name = "MariaDB Corporation"}]
 license = "MIT"
-packages = [{include = "langchain_mariadb"}]
+requires-python = ">=3.10,<4.0"
+dependencies = [
+    "langchain-core>=0.2.13,<2.0.0",
+    "sqlalchemy>=2,<3",
+    "numpy>=1.24,<3",
+]
 
-[tool.poetry.dependencies]
-python = ">=3.10,<4.0"
-langchain-core = ">=0.2.13,<2.0.0"
-sqlalchemy = "^2"
-numpy = ">=1.24,<3"
+[project.urls]
+Repository = "https://github.com/mariadb-corporation/langchain-mariadb"
+
+[tool.poetry]
+packages = [{include = "langchain_mariadb"}]
 
 [tool.poetry.group.docs]
 optional = true
@@ -70,7 +74,7 @@ disable_error_code = ["import-untyped"]
 omit = ["tests/*"]
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
+requires = ["poetry-core>=2.0.0"]
 build-backend = "poetry.core.masonry.api"
 
 [tool.pytest.ini_options]
