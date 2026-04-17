@@ -1,0 +1,186 @@
+name: Update GitBook Documentation
+
+on:
+  workflow_dispatch:  # Manual trigger via Actions tab
+  release:
+    types: [published]  # Triggered when a new release is published
+
+jobs:
+  check-secret:
+    runs-on: ubuntu-latest
+    outputs:
+      has-pat: ${{ steps.check.outputs.has-pat }}
+    steps:
+      - name: Check if MARIADB_DOCS_PAT is configured
+        id: check
+        env:
+          PAT: ${{ secrets.MARIADB_DOCS_PAT }}
+        run: |
+          if [ -n "$PAT" ]; then
+            echo "has-pat=true" >> $GITHUB_OUTPUT
+            echo "✅ MARIADB_DOCS_PAT is configured"
+          else
+            echo "has-pat=false" >> $GITHUB_OUTPUT
+            echo "::warning::MARIADB_DOCS_PAT secret is not configured. Skipping documentation update. See .github/workflows/SETUP.md for setup instructions."
+          fi
+
+  update-gitbook-docs:
+    needs: check-secret
+    if: needs.check-secret.outputs.has-pat == 'true'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout langchain-mariadb
+        uses: actions/checkout@v6
+        with:
+          path: langchain-mariadb
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install Poetry
+        run: |
+          curl -sSL https://install.python-poetry.org | python3 -
+          echo "$HOME/.local/bin" >> $GITHUB_PATH
+
+      - name: Install dependencies
+        working-directory: langchain-mariadb
+        run: poetry install --with docs
+
+      - name: Generate GitBook documentation
+        working-directory: langchain-mariadb
+        run: |
+          poetry run python docs/export_gitbook.py
+          echo "Generated files:"
+          ls -lh docs/gitbook_export/
+
+      - name: Get package version
+        id: version
+        working-directory: langchain-mariadb
+        run: |
+          VERSION=$(poetry version -s)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Package version: $VERSION"
+
+      - name: Fork and checkout mariadb-docs
+        env:
+          GH_TOKEN: ${{ secrets.MARIADB_DOCS_PAT }}
+        run: |
+          # Configure git
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
+          # Fork the repository if not already forked
+          gh repo fork mariadb-corporation/mariadb-docs --clone=false --remote=false || true
+
+          # Get the authenticated user (the fork owner)
+          FORK_OWNER=$(gh api user --jq .login)
+          echo "fork_owner=$FORK_OWNER" >> $GITHUB_ENV
+
+          # Clone the fork using token authentication
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/${FORK_OWNER}/mariadb-docs.git" mariadb-docs
+          cd mariadb-docs
+
+          # Add upstream remote and sync
+          git remote add upstream https://github.com/mariadb-corporation/mariadb-docs.git
+          git fetch upstream
+
+          # Sync fork with upstream main
+          git checkout main
+          git reset --hard upstream/main
+          git push origin main --force
+
+      - name: Create new branch in mariadb-docs
+        working-directory: mariadb-docs
+        run: |
+          BRANCH_NAME="update-langchain-mariadb-docs-v${{ steps.version.outputs.version }}"
+          git checkout -b "$BRANCH_NAME"
+          echo "branch=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Update documentation files
+        run: |
+          TARGET_DIR="mariadb-docs/connectors/other/langchain-mariadb/api-reference"
+          mkdir -p "$TARGET_DIR"
+
+          # Remove old markdown files (keep directory structure)
+          rm -f "$TARGET_DIR"/*.md
+
+          # Copy generated markdown files
+          cp langchain-mariadb/docs/gitbook_export/*.md "$TARGET_DIR/"
+
+          # Don't include the internal README in the GitBook docs
+          rm -f "$TARGET_DIR/README.md"
+
+          echo "Updated files:"
+          ls -lh "$TARGET_DIR/"
+
+      - name: Commit and push changes
+        working-directory: mariadb-docs
+        env:
+          GH_TOKEN: ${{ secrets.MARIADB_DOCS_PAT }}
+        run: |
+          git add connectors/other/langchain-mariadb/api-reference/
+
+          if git diff --staged --quiet; then
+            echo "No documentation changes to commit"
+            echo "has_changes=false" >> $GITHUB_ENV
+          else
+            git commit -m "Update LangChain MariaDB API docs to v${{ steps.version.outputs.version }}"
+            git push origin "${{ env.branch }}"
+            echo "has_changes=true" >> $GITHUB_ENV
+          fi
+
+      - name: Create Pull Request
+        if: env.has_changes == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.MARIADB_DOCS_PAT }}
+        working-directory: mariadb-docs
+        run: |
+          gh pr create \
+            --repo mariadb-corporation/mariadb-docs \
+            --head "${{ env.fork_owner }}:${{ env.branch }}" \
+            --base main \
+            --title "Update LangChain MariaDB API Documentation to v${{ steps.version.outputs.version }}" \
+            --body "## 📚 Documentation Update
+
+          This PR updates the LangChain MariaDB API reference documentation to version **v${{ steps.version.outputs.version }}**.
+
+          ### Changes
+          - Auto-generated from Python docstrings
+          - Updated API reference for all modules:
+            - Vector Stores (\`MariaDBStore\`)
+            - Chat Message History (\`MariaDBChatMessageHistory\`)
+            - Expression Filters (filter functions)
+            - Translator (\`MariaDBTranslator\`)
+
+          ### Files Updated
+          \`\`\`
+          connectors/other/langchain-mariadb/api-reference/
+          ├── index.md
+          ├── vectorstores.md
+          ├── chat_message_histories.md
+          ├── expression_filter.md
+          └── translator.md
+          \`\`\`
+
+          ### Source
+          Generated from: https://github.com/${{ github.repository }}
+          Commit: ${{ github.sha }}
+
+          ---
+          🤖 This PR was automatically generated by GitHub Actions"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "## Workflow Summary" >> $GITHUB_STEP_SUMMARY
+          echo "- **Package version:** v${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Changes detected:** ${{ env.has_changes }}" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ env.has_changes }}" = "true" ]; then
+            echo "- **Branch:** ${{ env.branch }}" >> $GITHUB_STEP_SUMMARY
+            echo "- **Status:** ✅ PR created in mariadb-corporation/mariadb-docs" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- **Status:** ℹ️ No changes to commit" >> $GITHUB_STEP_SUMMARY
+          fi
