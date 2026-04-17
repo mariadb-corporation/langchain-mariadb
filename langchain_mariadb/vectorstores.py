@@ -23,152 +23,13 @@ import numpy as np
 from langchain_core.documents import Document
 from langchain_core.embeddings import Embeddings
 from langchain_core.runnables.config import run_in_executor
-from langchain_core.vectorstores import VectorStore
+from langchain_core.vectorstores import VectorStore, VectorStoreRetriever
 from langchain_core.vectorstores.utils import maximal_marginal_relevance
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 
 from langchain_mariadb._utils import enquote_identifier
 from langchain_mariadb.expression_filter import MariaDBFilterExpressionConverter
-
-"""
-MariaDBStore is a vector store implementation that uses MariaDB database.
-
-Example:
-    Basic usage:
-    ```python
-    from langchain_mariadb import MariaDBStore
-    from langchain_openai import OpenAIEmbeddings
-
-    # Create a MariaDB connection pool
-    url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/mydatabase"
-
-    # Initialize embeddings model
-    embeddings = OpenAIEmbeddings()
-
-    # Create a new vector store
-    store = MariaDBStore.from_texts(
-        texts=["Hello, world!", "Another text"],
-        embedding=embeddings,
-        datasource=url,
-        collection_name="my_collection"  # Optional, defaults to "langchain"
-    )
-
-    # Search similar texts
-    results = store.similarity_search("Hello", k=2)
-
-    # Search with metadata filter
-    results = store.similarity_search(
-        "Hello",
-        filter={"category": "greeting"}
-    )
-
-    # Search with complex filter
-    results = store.similarity_search(
-        "Hello",
-        filter={
-            "$and": [
-                {"category": "greeting"},
-                {"language": {"$in": ["en", "es"]}}
-            ]
-        }
-    )
-    ```
-
-    Asynchronous usage:
-    ```python
-    import asyncio
-    from langchain_mariadb import MariaDBStore
-    from langchain_openai import OpenAIEmbeddings
-
-    async def search_documents():
-        # Create store as before
-        url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/mydatabase"
-        
-        embeddings = OpenAIEmbeddings()
-        store = MariaDBStore.from_texts(
-            texts=["Hello, world!", "Another text"],
-            embedding=embeddings,
-            datasource=url
-        )
-
-        # Perform async similarity search
-        results = await store.amax_marginal_relevance_search(
-            "Hello",
-            k=2,
-            fetch_k=10,
-            lambda_mult=0.5
-        )
-
-        # Async search with scores
-        results_with_scores = await store.amax_marginal_relevance_search_with_score(
-            "Hello",
-            k=2,
-            filter={"category": "greeting"}
-        )
-
-        return results, results_with_scores
-
-    # Run async function
-    results, results_with_scores = asyncio.run(search_documents())
-    ```
-
-Advanced Usage:
-    Custom configuration:
-    ```python
-    from langchain_mariadb import (
-       MariaDBStore, MariaDBStoreSettings, TableConfig, ColumnConfig
-    }
-
-    # Configure custom table and column names
-    config = MariaDBStoreSettings(
-        tables=TableConfig(
-            embedding_table="custom_embeddings",
-            collection_table="custom_collections"
-        ),
-        columns=ColumnConfig(
-            embedding_id="doc_id",
-            content="text_content",
-            metadata="doc_metadata"
-        )
-    )
-
-    store = MariaDBStore.from_texts(
-        texts=["Hello, world!"],
-        embedding=embeddings,
-        datasource=pool,
-        config=config
-    )
-    ```
-
-    Working with documents:
-    ```python
-    from langchain_core.documents import Document
-
-    # Create from documents
-    documents = [
-        Document(page_content="Hello", metadata={"source": "greeting.txt"}),
-        Document(page_content="World", metadata={"source": "greeting.txt"})
-    ]
-
-    store = MariaDBStore.from_documents(
-        documents=documents,
-        embedding=embeddings,
-        datasource=pool
-    )
-
-    # Add more documents
-    store.add_documents(documents)
-    ```
-
-Notes:
-    - Requires MariaDB 11.7.1 or later
-    - The database user needs permissions to create tables and indexes
-
-Distance Strategies:
-    - COSINE (default)
-    - EUCLIDEAN
-"""
 
 # ------------------------------------------------------------------------------
 # Constants
@@ -314,7 +175,120 @@ class MariaDBStoreSettings:
 # Main VectorStore Implementation
 # ------------------------------------------------------------------------------
 class MariaDBStore(VectorStore):
-    """MariaDB vector store integration."""
+    """MariaDB vector store integration for LangChain.
+    
+    A vector store implementation that uses MariaDB database for storing and
+    retrieving embeddings with similarity search capabilities.
+    
+    Requires MariaDB 11.7.1 or later with vector support enabled.
+    
+    Examples:
+        Basic usage::
+        
+            from langchain_mariadb import MariaDBStore
+            from langchain_openai import OpenAIEmbeddings
+            
+            # Create connection
+            url = "mariadb+mariadbconnector://user:pass@localhost/db"
+            embeddings = OpenAIEmbeddings()
+            
+            # Create vector store
+            store = MariaDBStore.from_texts(
+                texts=["Hello, world!", "Another text"],
+                embedding=embeddings,
+                datasource=url,
+                collection_name="my_collection"
+            )
+            
+            # Search similar texts
+            results = store.similarity_search("Hello", k=2)
+        
+        Search with metadata filter::
+        
+            results = store.similarity_search(
+                "Hello",
+                filter={"category": "greeting"}
+            )
+        
+        Complex filter with operators::
+        
+            results = store.similarity_search(
+                "Hello",
+                filter={
+                    "$and": [
+                        {"category": "greeting"},
+                        {"language": {"$in": ["en", "es"]}}
+                    ]
+                }
+            )
+        
+        Asynchronous usage::
+        
+            import asyncio
+            
+            async def search_docs():
+                results = await store.amax_marginal_relevance_search(
+                    "Hello", k=2, fetch_k=10, lambda_mult=0.5
+                )
+                return results
+            
+            results = asyncio.run(search_docs())
+        
+        Custom configuration::
+        
+            from langchain_mariadb import (
+                MariaDBStore, MariaDBStoreSettings,
+                TableConfig, ColumnConfig
+            )
+            
+            config = MariaDBStoreSettings(
+                tables=TableConfig(
+                    embedding_table="custom_embeddings",
+                    collection_table="custom_collections"
+                ),
+                columns=ColumnConfig(
+                    embedding_id="doc_id",
+                    content="text_content",
+                    metadata="doc_metadata"
+                )
+            )
+            
+            store = MariaDBStore.from_texts(
+                texts=["Hello"],
+                embedding=embeddings,
+                datasource=url,
+                config=config
+            )
+        
+        Working with documents::
+        
+            from langchain_core.documents import Document
+            
+            documents = [
+                Document(
+                    page_content="Hello",
+                    metadata={"source": "greeting.txt"}
+                ),
+                Document(
+                    page_content="World",
+                    metadata={"source": "greeting.txt"}
+                )
+            ]
+            
+            store = MariaDBStore.from_documents(
+                documents=documents,
+                embedding=embeddings,
+                datasource=url
+            )
+            
+            # Add more documents
+            store.add_documents(documents)
+    
+    Note:
+        - Requires MariaDB 11.7.1 or later
+        - Database user needs CREATE TABLE and CREATE INDEX permissions
+        - Supports COSINE (default) and EUCLIDEAN distance strategies
+    """
 
     # --------------------------------------------------------------------------
     # Initialization
@@ -1510,6 +1484,13 @@ class MariaDBStore(VectorStore):
         metadatas: Optional[List[dict]] = None,
         *,
         ids: Optional[List[str]] = None,
+        datasource: Optional[Union[Engine, str]] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
+        embedding_length: Optional[int] = None,
+        config: MariaDBStoreSettings = MariaDBStoreSettings(),
+        logger: Optional[logging.Logger] = None,
+        relevance_score_fn: Optional[Callable[[float], float]] = None,
         **kwargs: Any,
     ) -> MariaDBStore:
         """Create a MariaDBStore instance from texts.
@@ -1519,14 +1500,13 @@ class MariaDBStore(VectorStore):
             embedding: Embeddings object for creating embeddings
             metadatas: Optional list of metadata dicts for each text
             ids: Optional list of unique IDs for each text
-            datasource: datasource (connection string, sqlalchemy engine or
-                        MariaDB connection pool)
+            datasource: Database connection (connection string or sqlalchemy engine)
             collection_name: Name of the collection to store vectors
             distance_strategy: Strategy for distances (COSINE or EUCLIDEAN)
             embedding_length: Length of embedding vectors (default: 1536)
             config: Store configuration for tables and columns
             logger: Optional logger instance for debugging
-            relevance_score_fn: override function relevance score calculation
+            relevance_score_fn: Optional function to override relevance score calculation
             **kwargs: Additional arguments passed to add_embeddings
 
         Returns:
@@ -1541,6 +1521,13 @@ class MariaDBStore(VectorStore):
             ids,
             metadatas=metadatas,
             embedding=embedding,
+            datasource=datasource,
+            collection_name=collection_name,
+            distance_strategy=distance_strategy,
+            embedding_length=embedding_length,
+            config=config,
+            logger=logger,
+            relevance_score_fn=relevance_score_fn,
             **kwargs,
         )
 
@@ -1564,10 +1551,10 @@ class MariaDBStore(VectorStore):
             ids: Optional list of IDs for the documents
             metadatas: Optional list of metadata dicts
             embedding: Embeddings object for creating embeddings
-            collection_name: Name of collection (default: langchain)
             distance_strategy: Strategy for computing distances
             relevance_score_fn: Optional function to compute relevance scores
-            **kwargs: Additional arguments passed to constructor
+            config: Store configuration for tables and columns
+            **kwargs: Additional arguments including datasource, collection_name
 
         Returns:
             MariaDBStore instance
@@ -1642,6 +1629,15 @@ class MariaDBStore(VectorStore):
         cls: Type[MariaDBStore],
         documents: List[Document],
         embedding: Embeddings,
+        *,
+        ids: Optional[List[str]] = None,
+        datasource: Optional[Union[Engine, str]] = None,
+        collection_name: str = _LANGCHAIN_DEFAULT_COLLECTION_NAME,
+        distance_strategy: DistanceStrategy = DistanceStrategy.COSINE,
+        embedding_length: Optional[int] = None,
+        config: MariaDBStoreSettings = MariaDBStoreSettings(),
+        logger: Optional[logging.Logger] = None,
+        relevance_score_fn: Optional[Callable[[float], float]] = None,
         **kwargs: Any,
     ) -> MariaDBStore:
         """Create a MariaDBStore instance from documents.
@@ -1649,11 +1645,14 @@ class MariaDBStore(VectorStore):
         Args:
             documents: List of Document objects to store
             embedding: Embeddings object for creating embeddings
-            datasource: datasource (connection string, sqlalchemy engine or MariaDB
-                        connection pool)
-            collection_name: Name of collection (default: langchain)
-            distance_strategy: Strategy for computing distances
             ids: Optional list of IDs for the documents
+            datasource: Database connection (connection string or sqlalchemy engine)
+            collection_name: Name of the collection to store vectors
+            distance_strategy: Strategy for distances (COSINE or EUCLIDEAN)
+            embedding_length: Length of embedding vectors (default: 1536)
+            config: Store configuration for tables and columns
+            logger: Optional logger instance for debugging
+            relevance_score_fn: Optional function to override relevance score calculation
             **kwargs: Additional arguments passed to from_texts
 
         Returns:
@@ -1668,5 +1667,65 @@ class MariaDBStore(VectorStore):
             texts=texts,
             embedding=embedding,
             metadatas=metadatas,
+            ids=ids,
+            datasource=datasource,
+            collection_name=collection_name,
+            distance_strategy=distance_strategy,
+            embedding_length=embedding_length,
+            config=config,
+            logger=logger,
+            relevance_score_fn=relevance_score_fn,
             **kwargs,
         )
+
+    def as_retriever(self, **kwargs: Any) -> VectorStoreRetriever:
+        """Return VectorStoreRetriever initialized from this VectorStore.
+
+        Args:
+            **kwargs: Keyword arguments to pass to the search function.
+                Can include:
+
+                - search_type: Defines the type of search that the Retriever should
+                  perform. Can be 'similarity' (default), 'mmr', or
+                  'similarity_score_threshold'.
+                - search_kwargs: Keyword arguments to pass to the search function.
+                  Can include:
+
+                  - k: Amount of documents to return (Default: 4)
+                  - score_threshold: Minimum relevance threshold for
+                    similarity_score_threshold
+                  - fetch_k: Amount of documents to pass to MMR algorithm (Default: 20)
+                  - lambda_mult: Diversity of results returned by MMR; 1 for minimum
+                    diversity and 0 for maximum. (Default: 0.5)
+                  - filter: Filter by document metadata
+
+        Returns:
+            VectorStoreRetriever instance configured for this vector store.
+
+        Examples:
+            Retrieve more documents with higher diversity::
+
+                docsearch.as_retriever(
+                    search_type="mmr",
+                    search_kwargs={"k": 6, "lambda_mult": 0.25}
+                )
+
+            Fetch more documents for the MMR algorithm to consider::
+
+                docsearch.as_retriever(
+                    search_type="mmr",
+                    search_kwargs={"k": 5, "fetch_k": 50}
+                )
+
+            Only retrieve documents above a relevance threshold::
+
+                docsearch.as_retriever(
+                    search_type="similarity_score_threshold",
+                    search_kwargs={"score_threshold": 0.8}
+                )
+
+            Get only the single most similar document::
+
+                docsearch.as_retriever(search_kwargs={"k": 1})
+        """
+        return super().as_retriever(**kwargs)

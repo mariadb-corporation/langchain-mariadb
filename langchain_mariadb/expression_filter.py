@@ -96,11 +96,10 @@ class Value:
 
 
 class Expression:
-    """
-    Represents a boolean filter expression with a specific structure:
+    """Represents a boolean filter expression with a specific structure.
+    
     - Consists of a left operand, an operator, and an optional right operand
-    - Enables construction of complex filtering logic using different types of
-      comparisons
+    - Enables construction of complex filtering logic using different types of comparisons
     """
 
     def __init__(self, type_: Operator, left: Operand, right: Optional[Operand] = None):
@@ -110,11 +109,9 @@ class Expression:
 
 
 class Group:
-    """
-    Represents a grouped collection of filter expressions that should be evaluated
-    together
-    - Enables creating complex, nested filtering logic with specific evaluation
-      precedence
+    """Represents a grouped collection of filter expressions.
+    
+    - Enables creating complex, nested filtering logic with specific evaluation precedence
     - Analogous to parentheses in mathematical or logical expressions
     """
 
@@ -143,48 +140,152 @@ class StringBuilder:
 
 
 def eq(key: str, value: ValueType) -> Expression:
+    """Check if a key equals a value.
+    
+    Args:
+        key: The metadata field name to filter on
+        value: The value to compare against
+        
+    Returns:
+        Expression representing key == value
+        
+    Example:
+        >>> eq("status", "active")
+        # Matches documents where status == "active"
+    """
     return Expression(
         Operator.EQ, Key(key), Value(value) if value is not None else None
     )
 
 
 def ne(key: str, value: ValueType) -> Expression:
+    """Check if a key does not equal a value.
+    
+    Args:
+        key: The metadata field name to filter on
+        value: The value to compare against
+        
+    Returns:
+        Expression representing key != value
+        
+    Example:
+        >>> ne("status", "deleted")
+        # Matches documents where status != "deleted"
+    """
     return Expression(
         Operator.NE, Key(key), Value(value) if value is not None else None
     )
 
 
 def gt(key: str, value: Union[int, str, float]) -> Expression:
+    """Check if a key is greater than a value.
+    
+    Args:
+        key: The metadata field name to filter on
+        value: The numeric or string value to compare against
+        
+    Returns:
+        Expression representing key > value
+        
+    Example:
+        >>> gt("age", 18)
+        # Matches documents where age > 18
+    """
     return Expression(
         Operator.GT, Key(key), Value(value) if value is not None else None
     )
 
 
 def gte(key: str, value: Union[int, str, float]) -> Expression:
+    """Check if a key is greater than or equal to a value.
+    
+    Args:
+        key: The metadata field name to filter on
+        value: The numeric or string value to compare against
+        
+    Returns:
+        Expression representing key >= value
+        
+    Example:
+        >>> gte("age", 18)
+        # Matches documents where age >= 18
+    """
     return Expression(
         Operator.GTE, Key(key), Value(value) if value is not None else None
     )
 
 
 def lt(key: str, value: Union[int, str, float]) -> Expression:
+    """Check if a key is less than a value.
+    
+    Args:
+        key: The metadata field name to filter on
+        value: The numeric or string value to compare against
+        
+    Returns:
+        Expression representing key < value
+        
+    Example:
+        >>> lt("price", 100)
+        # Matches documents where price < 100
+    """
     return Expression(
         Operator.LT, Key(key), Value(value) if value is not None else None
     )
 
 
 def lte(key: str, value: Union[int, str, float]) -> Expression:
+    """Check if a key is less than or equal to a value.
+    
+    Args:
+        key: The metadata field name to filter on
+        value: The numeric or string value to compare against
+        
+    Returns:
+        Expression representing key <= value
+        
+    Example:
+        >>> lte("price", 100)
+        # Matches documents where price <= 100
+    """
     return Expression(
         Operator.LTE, Key(key), Value(value) if value is not None else None
     )
 
 
 def like(key: str, value: Union[int, str, float]) -> Expression:
+    """Check if a key matches a pattern (SQL LIKE).
+    
+    Args:
+        key: The metadata field name to filter on
+        value: The pattern to match (use % as wildcard)
+        
+    Returns:
+        Expression representing key LIKE value
+        
+    Example:
+        >>> like("name", "John%")
+        # Matches documents where name starts with "John"
+    """
     return Expression(
         Operator.LIKE, Key(key), Value(value) if value is not None else None
     )
 
 
 def nlike(key: str, value: Union[int, str, float]) -> Expression:
+    """Check if a key does not match a pattern (SQL NOT LIKE).
+    
+    Args:
+        key: The metadata field name to filter on
+        value: The pattern to not match (use % as wildcard)
+        
+    Returns:
+        Expression representing key NOT LIKE value
+        
+    Example:
+        >>> nlike("email", "%@spam.com")
+        # Matches documents where email doesn't end with @spam.com
+    """
     return Expression(
         Operator.NLIKE, Key(key), Value(value) if value is not None else None
     )
@@ -193,7 +294,19 @@ def nlike(key: str, value: Union[int, str, float]) -> Expression:
 def includes(
     key: str, values: Union[List[int], List[str], List[bool], List[float]]
 ) -> Expression:
-    """Check if a key's value is in a list of values (formerly in_)"""
+    """Check if a key's value is in a list of values (SQL IN operator).
+    
+    Args:
+        key: The metadata field name to filter on
+        values: List of values to check against
+        
+    Returns:
+        Expression representing key IN values
+        
+    Example:
+        >>> includes("country", ["US", "CA", "UK"])
+        # Matches documents where country is US, CA, or UK
+    """
     return Expression(
         Operator.IN, Key(key), Value(values) if values is not None else None
     )
@@ -202,28 +315,87 @@ def includes(
 def excludes(
     key: str, values: Union[List[int], List[str], List[bool], List[float]]
 ) -> Expression:
-    """Check if a key's value is not in a list of values (formerly nin)"""
+    """Check if a key's value is not in a list of values (SQL NOT IN operator).
+    
+    Args:
+        key: The metadata field name to filter on
+        values: List of values to exclude
+        
+    Returns:
+        Expression representing key NOT IN values
+        
+    Example:
+        >>> excludes("status", ["deleted", "archived"])
+        # Matches documents where status is not deleted or archived
+    """
     return Expression(
         Operator.NIN, Key(key), Value(values) if values is not None else None
     )
 
 
 def both(left: Operand, right: Operand) -> Expression:
-    """Combine two expressions with AND"""
+    """Combine two expressions with logical AND.
+    
+    Args:
+        left: First expression
+        right: Second expression
+        
+    Returns:
+        Expression representing (left AND right)
+        
+    Example:
+        >>> both(eq("status", "active"), gte("age", 18))
+        # Matches documents where status is active AND age >= 18
+    """
     return Expression(Operator.AND, left, right)
 
 
 def either(left: Operand, right: Operand) -> Expression:
-    """Combine two expressions with OR"""
+    """Combine two expressions with logical OR.
+    
+    Args:
+        left: First expression
+        right: Second expression
+        
+    Returns:
+        Expression representing (left OR right)
+        
+    Example:
+        >>> either(eq("status", "active"), eq("status", "pending"))
+        # Matches documents where status is active OR pending
+    """
     return Expression(Operator.OR, left, right)
 
 
 def negate(content: Expression) -> Expression:
-    """Negate an expression (i.e. NOT)"""
+    """Negate an expression with logical NOT.
+    
+    Args:
+        content: Expression to negate
+        
+    Returns:
+        Expression representing NOT content
+        
+    Example:
+        >>> negate(eq("status", "deleted"))
+        # Matches documents where status is NOT deleted
+    """
     return Expression(Operator.NOT, content)
 
 
 def group(content: Expression) -> Group:
+    """Group an expression with parentheses for precedence control.
+    
+    Args:
+        content: Expression to group
+        
+    Returns:
+        Group wrapping the expression
+        
+    Example:
+        >>> group(either(eq("a", 1), eq("b", 2)))
+        # Creates (a == 1 OR b == 2) as a grouped expression
+    """
     return Group(content)
 
 

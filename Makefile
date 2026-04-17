@@ -40,6 +40,16 @@ spell_fix:
 	poetry run codespell --toml pyproject.toml -w
 
 ######################
+# DOCUMENTATION
+######################
+
+docs_export:
+	poetry run python docs/export_gitbook.py
+
+docs_clean:
+	rm -rf site docs/gitbook_export
+
+######################
 # HELP
 ######################
 
@@ -54,4 +64,7 @@ help:
 	@echo 'coverage                     - run unit tests and generate coverage report'
 	@echo 'test                         - run unit tests'
 	@echo 'test TEST_FILE=<test_file>   - run all tests in file'
-	@echo '-- DOCUMENTATION tasks are from the top-level Makefile --'
+	@echo '-- DOCUMENTATION --'
+	@echo 'docs_build                   - build the documentation'
+	@echo 'docs_clean                   - clean generated documentation files'
+	@echo 'docs_serve                   - build and serve documentation with live reload'

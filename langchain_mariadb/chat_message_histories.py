@@ -84,37 +84,37 @@ class MariaDBChatMessageHistory(BaseChatMessageHistory):
             session_id: UUID string to identify the chat session
             datasource: datasource (connection string or a sqlalchemy engine)
 
-        Example:
-            ```python
-            from langchain_core.messages import HumanMessage, AIMessage
-            import uuid
-
-            # Create a MariaDB connection pool
-            url = f"mariadb+mariadbconnector://myuser:mypassword@localhost/chatdb"
-
-            # Create tables if needed
-            MariaDBChatMessageHistory.create_tables(url, "chat_messages")
-
-            # Initialize history for a session
-            history = MariaDBChatMessageHistory(
-                "chat_messages",
-                str(uuid.uuid4()),
-                datasource=url
-            )
-
-            # Add messages
-            history.add_messages([
-                HumanMessage(content="Hello!"),
-                AIMessage(content="Hi there!")
-            ])
-
-            # Retrieve messages
-            messages = history.messages
-            ```
-
         Raises:
             ValueError: If pool is not provided, session_id is not a valid UUID,
-                       or table_name contains invalid characters
+                or table_name contains invalid characters
+
+        Example:
+            .. code-block:: python
+
+                from langchain_core.messages import HumanMessage, AIMessage
+                import uuid
+
+                # Create a MariaDB connection pool
+                url = "mariadb+mariadbconnector://myuser:mypassword@localhost/chatdb"
+
+                # Create tables if needed
+                MariaDBChatMessageHistory.create_tables(url, "chat_messages")
+
+                # Initialize history for a session
+                history = MariaDBChatMessageHistory(
+                    "chat_messages",
+                    str(uuid.uuid4()),
+                    datasource=url
+                )
+
+                # Add messages
+                history.add_messages([
+                    HumanMessage(content="Hello!"),
+                    AIMessage(content="Hi there!")
+                ])
+
+                # Retrieve messages
+                messages = history.messages
         """
         self._datasource = _set_datasource(datasource, engine_args)
 
