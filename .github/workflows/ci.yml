@@ -50,7 +50,7 @@ jobs:
         with:
           character set server: 'utf8mb4'
           collation server: 'utf8mb4_general_ci'
-          mariadb version: '11.7-rc'
+          mariadb version: '11.8'
           mysql database: 'langchain'
           mysql root password: 'langchain'
           mysql user: 'langchain'
@@ -72,6 +72,8 @@ jobs:
         run: |
           echo "Running tests, installing dependencies with poetry..."
           poetry install --with test,lint,typing,docs
+      - name: Upgrade to MariaDB Python Connector 2.0 RC
+        run: poetry run pip install --upgrade --pre "mariadb>=2.0.0rc1,<3.0.0"
       - name: Run tests
         run: make test
         env:
