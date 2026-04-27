@@ -514,12 +514,17 @@ class MariaDBStore(VectorStore):
         con = self._datasource.raw_connection()
         cursor = con.cursor()
         try:
-            cursor.execute(
-                f"SELECT {self._collection_id_col_name}"
-                f" FROM {self._collection_table_name}"
-                f" WHERE {self._collection_label_col_name}=?",
-                (self.collection_name,),
-            )
+            try:
+                cursor.execute(
+                    f"SELECT {self._collection_id_col_name}"
+                    f" FROM {self._collection_table_name}"
+                    f" WHERE {self._collection_label_col_name}=?",
+                    (self.collection_name,),
+                )
+            except Exception as e:
+                if hasattr(e, "errno") and e.errno == 1146:  # NO SUCH TABLE
+                    return None
+                raise e
             row = cursor.fetchone()
             if row is not None:
                 return row[0]
