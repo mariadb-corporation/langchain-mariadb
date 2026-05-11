@@ -26,10 +26,22 @@ jobs:
 
   update-gitbook-docs:
     needs: check-secret
-    if: needs.check-secret.outputs.has-pat == 'true'
+    if: needs.check-secret.outputs.has-pat == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
     steps:
+      - name: Check admin permissions for manual dispatch
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          if ! PERMISSION=$(gh api repos/${{ github.repository }}/collaborators/${{ github.actor }}/permission --jq .permission 2>/dev/null); then
+            echo "Error: Failed to verify permissions. Only repository admins can manually trigger this workflow."
+            exit 1
+          fi
+          if [ "$PERMISSION" != "admin" ]; then
+            echo "Error: Only repository admins can manually trigger this workflow."
+            exit 1
+          fi
+
       - name: Checkout langchain-mariadb
         uses: actions/checkout@v6
         with:
